@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Fluent MD Todo",
+  "version": "1.0.0",
+  "identifier": "com.codex.fluent-md-todo",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Fluent MD Todo",
+        "width": 1080,
+        "height": 760,
+        "minWidth": 740,
+        "minHeight": 560,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Markdown 待办清单",
+    "longDescription": "以 Fluent 风格管理 Markdown 任务，支持外部变更同步。"
+  }
+}

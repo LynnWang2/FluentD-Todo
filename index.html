@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fluent MD Todo — Markdown 实时待办</title>
+<style>
+  :root {
+    --font-family: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+    --bg-alpha: 0.76;
+    --card-alpha: 0.65;
+    --surface-rgb: 243, 246, 251;
+    --card-rgb: 255, 255, 255;
+    --card-hover-rgb: 255, 255, 255;
+    --text-primary: #1a1b1e;
+    --text-secondary: #5c6068;
+    --text-muted: #8a8f99;
+    --accent: #0067c0;
+    --accent-hover: #005ba8;
+    --accent-light: rgba(0, 103, 192, 0.10);
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-strong: rgba(0, 0, 0, 0.14);
+    --specular-border: rgba(255, 255, 255, 0.75);
+    --danger: #c42b1c;
+    --danger-bg: rgba(196, 43, 28, 0.10);
+    --success: #0f7b0f;
+    --warning: #d83b01;
+    --shadow-window: 0 20px 50px rgba(0, 0, 0, 0.16), 0 4px 14px rgba(0, 0, 0, 0.06);
+    --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.03);
+    --radius-window: 12px;
+    --radius-card: 8px;
+    --radius-control: 6px;
+  }
+
+  [data-theme="dark"] {
+    --surface-rgb: 32, 34, 40;
+    --card-rgb: 45, 48, 56;
+    --card-hover-rgb: 54, 58, 68;
+    --text-primary: #f3f4f6;
+    --text-secondary: #a6abb4;
+    --text-muted: #6e737d;
+    --accent: #60cdff;
+    --accent-hover: #7ad5ff;
+    --accent-light: rgba(96, 205, 255, 0.14);
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --specular-border: rgba(255, 255, 255, 0.10);
+    --danger: #ff99a4;
+    --danger-bg: rgba(255, 153, 164, 0.14);
+    --success: #6ccb5f;
+    --warning: #fce100;
+    --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.48), 0 4px 16px rgba(0, 0, 0, 0.28);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.18);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+  }
+
+  body {
+    font-family: var(--font-family);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-x: hidden;
+    /* Windows 11 Bloom-inspired ambient mesh backdrop for browser preview */
+    background:
+      radial-gradient(circle at 18% 22%, rgba(96, 205, 255, 0.36) 0%, transparent 48%),
+      radial-gradient(circle at 82% 18%, rgba(139, 92, 246, 0.28) 0%, transparent 50%),
+      radial-gradient(circle at 75% 82%, rgba(0, 103, 192, 0.30) 0%, transparent 52%),
+      radial-gradient(circle at 22% 80%, rgba(56, 189, 248, 0.24) 0%, transparent 45%),
+      linear-gradient(135deg, #e4edf8 0%, #d4e3f6 50%, #e9e4f5 100%);
+    transition: background 0.35s ease;
+  }
+
+  /* Native frameless window: let the OS backdrop show through around the Fluent surface. */
+  html, body {
+    width: 100%;
+    height: 100%;
+  }
+  body.pure-transparent {
+    padding: 0;
+    overflow: hidden;
+    background: transparent !important;
+    -webkit-app-region: no-drag;
+  }
+  body.pure-transparent .fluent-window {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+    /* Reveal more of the Windows system blur while keeping the todo cards readable. */
+    background: rgba(var(--surface-rgb), calc(var(--bg-alpha) * 0.54));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  body.pure-transparent.window-solid-drag .fluent-window {
+    /* Keep the desktop material enabled underneath this opaque moving surface. */
+    background: rgb(var(--surface-rgb));
+  }
+  body.pure-transparent .titlebar-actions {
+    margin-right: 0;
+  }
+  body.pure-transparent .titlebar {
+    -webkit-app-region: no-drag;
+  }
+
+  [data-theme="dark"] body,
+  body.dark-backdrop {
+    background:
+      radial-gradient(circle at 18% 22%, rgba(0, 103, 192, 0.35) 0%, transparent 48%),
+      radial-gradient(circle at 82% 18%, rgba(88, 28, 135, 0.35) 0%, transparent 50%),
+      radial-gradient(circle at 75% 82%, rgba(14, 116, 144, 0.30) 0%, transparent 52%),
+      linear-gradient(135deg, #0f1319 0%, #161b26 55%, #12131c 100%);
+  }
+
+  body.pure-transparent {
+    background: transparent !important;
+    padding: 0;
+  }
+
+  /* Main Fluent Window Container */
+  .fluent-window {
+    width: 100%;
+    max-width: 820px;
+    height: min(86vh, 760px);
+    min-height: 520px;
+    background: rgba(var(--surface-rgb), var(--bg-alpha));
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border-radius: var(--radius-window);
+    border: 1px solid var(--specular-border);
+    box-shadow: var(--shadow-window), 0 0 0 1px var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: background-color 0.18s ease, max-width 0.28s cubic-bezier(0.16, 1, 0.3, 1), height 0.28s ease;
+  }
+
+  .fluent-window.compact-mode {
+    max-width: 420px;
+    height: min(82vh, 640px);
+  }
+
+  /* Titlebar / Top Header */
+  .titlebar {
+    height: 46px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+  }
+
+  .brand-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #0078d4, #3aa0f3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 120, 212, 0.35);
+  }
+
+  .sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(var(--card-rgb), 0.55);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+  }
+
+  .sync-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #9ca3af;
+  }
+
+  .sync-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 0 3px rgba(15, 123, 15, 0.16);
+  }
+
+  .sync-dot.pulse {
+    background: var(--accent);
+    transform: scale(1.25);
+  }
+
+  .titlebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .window-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--border-subtle);
+    -webkit-app-region: no-drag;
+  }
+
+  .window-control {
+    width: 34px;
+    height: 30px;
+    border: 0;
+    border-radius: 5px;
+    display: grid;
+    place-items: center;
+    color: var(--text-secondary);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .window-control:hover {
+    color: var(--text-primary);
+    background: rgba(var(--card-rgb), 0.55);
+  }
+
+  .window-control.close:hover {
+    color: #fff;
+    background: #c42b1c;
+  }
+
+  .window-control svg { width: 12px; height: 12px; }
+
+  .icon-btn {
+    height: 30px;
+    min-width: 30px;
+    padding: 0 8px;
+    border-radius: var(--radius-control);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .icon-btn:hover {
+    background: rgba(var(--card-rgb), 0.65);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+  }
+
+  .icon-btn.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: rgba(0, 103, 192, 0.2);
+  }
+
+  /* Opacity Popover Bar */
+  .opacity-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+  }
+
+  .opacity-slider {
+    width: 64px;
+    height: 4px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* Toolbar / File Selection Bar */
+  .file-toolbar {
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  .file-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border-radius: var(--radius-control);
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    border: 1px solid var(--border-subtle);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-meta {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .btn-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .fluent-btn {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border-strong);
+    background: rgba(var(--card-rgb), 0.78);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.15s ease;
+  }
+
+  .fluent-btn:hover {
+    background: rgba(var(--card-hover-rgb), 0.95);
+    border-color: var(--accent);
+  }
+
+  .fluent-btn:active {
+    transform: translateY(1px);
+  }
+
+  .fluent-btn.primary {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: transparent;
+  }
+
+  [data-theme="dark"] .fluent-btn.primary {
+    color: #09131c;
+    font-weight: 600;
+  }
+
+  .fluent-btn.primary:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Body Layout: Sidebar + Content */
+  .workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 195px;
+    padding: 14px 10px;
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .fluent-window.compact-mode .sidebar {
+    display: none;
+  }
+
+  .nav-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 8px 10px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .nav-item {
+    height: 34px;
+    padding: 0 10px;
+    border-radius: var(--radius-control);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.14s ease;
+  }
+
+  .nav-item:hover {
+    background: rgba(var(--card-rgb), 0.50);
+    color: var(--text-primary);
+  }
+
+  .nav-item.active {
+    background: rgba(var(--card-rgb), 0.82);
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: var(--shadow-card);
+  }
+
+  .nav-item.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--accent);
+  }
+
+  .nav-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-count {
+    font-size: 11.5px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(var(--surface-rgb), 0.7);
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  /* Main Task Area */
+  .main-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* Header Stats & Search */
+  .pane-header {
+    padding: 14px 20px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .pane-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pane-title {
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .progress-track {
+    width: 120px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--border-strong);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+    width: 0%;
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .search-box {
+    position: relative;
+    width: 190px;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 32px;
+    padding: 0 28px 0 30px;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border-subtle);
+    border-bottom: 1.5px solid var(--border-strong);
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .search-input:focus {
+    border-bottom-color: var(--accent);
+    background: rgba(var(--card-rgb), 0.95);
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  /* Compact filter pills (visible when sidebar hidden) */
+  .compact-filters {
+    display: none;
+    padding: 0 20px 8px;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .fluent-window.compact-mode .compact-filters {
+    display: flex;
+  }
+
+  .filter-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: rgba(var(--card-rgb), 0.55);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .filter-pill.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Task Scroll List */
+  .task-list-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .task-list-container::-webkit-scrollbar {
+    width: 6px;
+  }
+  .task-list-container::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+  }
+
+  .section-group-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 10px 0 2px;
+    padding: 2px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .task-card {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 13px;
+    border-radius: var(--radius-card);
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-card);
+    transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .task-card:hover {
+    background: rgba(var(--card-hover-rgb), 0.88);
+    border-color: var(--border-strong);
+  }
+
+  .task-card.completed {
+    opacity: 0.68;
+    background: rgba(var(--card-rgb), calc(var(--card-alpha) * 0.65));
+  }
+
+  .task-card.subtask {
+    margin-left: 24px;
+  }
+
+  /* Fluent Checkbox */
+  .fluent-checkbox {
+    width: 19px;
+    height: 19px;
+    border-radius: 5px;
+    border: 1.5px solid var(--text-muted);
+    background: rgba(var(--card-rgb), 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .fluent-checkbox:hover {
+    border-color: var(--accent);
+  }
+
+  .task-card.completed .fluent-checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .fluent-checkbox svg {
+    width: 12px;
+    height: 12px;
+    stroke: #ffffff;
+    stroke-width: 2.5;
+    fill: none;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  [data-theme="dark"] .fluent-checkbox svg {
+    stroke: #09131c;
+  }
+
+  .task-card.completed .fluent-checkbox svg {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Task Content */
+  .task-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .task-text-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .task-text {
+    font-size: 13.5px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    word-break: break-word;
+    user-select: text;
+    cursor: text;
+  }
+
+  .task-card.completed .task-text {
+    text-decoration: line-through;
+    color: var(--text-muted);
+  }
+
+  .task-edit-input {
+    width: 100%;
+    font-size: 13.5px;
+    font-family: inherit;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1.5px solid var(--accent);
+    background: rgba(var(--card-rgb), 0.95);
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .badge-tag {
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+
+  .badge-priority-high {
+    background: var(--danger-bg);
+    color: var(--danger);
+    font-weight: 600;
+  }
+
+  .badge-line {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    font-family: Consolas, monospace;
+  }
+
+  .task-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.14s ease;
+  }
+
+  .task-card:hover .task-actions {
+    opacity: 1;
+  }
+
+  .task-action-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.14s ease;
+  }
+
+  .task-action-btn:hover {
+    background: var(--border-subtle);
+    color: var(--text-primary);
+  }
+
+  .task-action-btn.delete:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+
+  /* Bottom Quick-Add Bar */
+  .add-bar {
+    padding: 12px 20px 15px;
+    border-top: 1px solid var(--border-subtle);
+    background: rgba(var(--surface-rgb), 0.45);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .add-input-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .add-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 36px;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border-subtle);
+    border-bottom: 2px solid var(--accent);
+    background: rgba(var(--card-rgb), 0.85);
+    color: var(--text-primary);
+    font-size: 13.5px;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .add-input:focus {
+    background: rgba(var(--card-rgb), 1);
+    box-shadow: 0 2px 10px rgba(0, 103, 192, 0.10);
+  }
+
+  .add-plus-icon {
+    position: absolute;
+    left: 11px;
+    color: var(--accent);
+    pointer-events: none;
+  }
+
+  .section-select {
+    height: 38px;
+    max-width: 145px;
+    padding: 0 10px;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border-strong);
+    background: rgba(var(--card-rgb), 0.85);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Empty State */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 36px 20px;
+    color: var(--text-secondary);
+    gap: 10px;
+  }
+
+  .empty-state svg {
+    color: var(--accent);
+    opacity: 0.75;
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: rgba(var(--card-rgb), 0.92);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-window);
+    font-size: 12.5px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: all 0.22s ease;
+    z-index: 100;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Raw Markdown Drawer Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+
+  .modal-backdrop.open {
+    display: flex;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: 620px;
+    background: rgba(var(--surface-rgb), 0.96);
+    border: 1px solid var(--specular-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-window);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .raw-textarea {
+    width: 100%;
+    height: 300px;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: rgba(var(--card-rgb), 0.9);
+    color: var(--text-primary);
+    resize: vertical;
+    outline: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="fluent-window" id="appWindow">
+  <!-- Windows 11 Fluent Titlebar -->
+  <header class="titlebar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 11 12 14 22 4"></polyline>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+        </svg>
+      </div>
+      <span>Fluent MD Todo</span>
+      <div class="sync-badge" id="syncBadge" title="采用瞬时快照读写技术，零文件锁占用，每 500ms 自动检测外部编辑器修改">
+        <span class="sync-dot active" id="syncDot"></span>
+        <span id="syncStatusText">演示模式</span>
+      </div>
+    </div>
+
+    <div class="titlebar-actions">
+      <div class="opacity-bar" title="调节 Fluent 亚克力/云母半透明度">
+        <span>半透明</span>
+        <input type="range" id="opacitySlider" class="opacity-slider" min="35" max="98" value="76" />
+      </div>
+      <button class="icon-btn" id="btnCompact" title="切换紧凑悬浮窗布局">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+        <span>紧凑</span>
+      </button>
+      <button class="icon-btn" id="btnRawMd" title="查看或编辑底层 Markdown 源码">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span>源码</span>
+      </button>
+      <button class="icon-btn" id="btnTheme" title="切换深色 / 浅色 Fluent 主题">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="themeIcon">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btnAutoStart" title="开启开机自启动" aria-label="开机自启动" aria-pressed="false">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M5.5 5.5a9 9 0 1 0 13 0"/></svg>
+        <span>自启动</span>
+      </button>
+      <div class="window-controls" aria-label="窗口控制">
+        <button class="window-control" id="btnMinimize" title="最小化" aria-label="最小化">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M2 9.5h8"/></svg>
+        </button>
+        <button class="window-control" id="btnMaximize" title="最大化 / 还原" aria-label="最大化或还原">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><rect x="2.25" y="2.25" width="7.5" height="7.5"/></svg>
+        </button>
+        <button class="window-control close" id="btnCloseWindow" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="m3 3 6 6M9 3 3 9"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- File Selection & Sync Toolbar -->
+  <section class="file-toolbar">
+    <div class="file-info">
+      <div class="file-pill" id="currentFileName" title="当前关联的 Markdown 文件">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+        </svg>
+        <span id="fileNameLabel">未选择本地文件（当前为内置演示清单）</span>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="fluent-btn primary" id="btnOpenFile">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span>选择 .md 文件</span>
+      </button>
+      <button class="fluent-btn" id="btnCreateFile" title="新建一个本地 Markdown 待办文件并实时绑定">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>新建 .md</span>
+      </button>
+      <button class="fluent-btn" id="btnClearCompleted" title="仅在应用中隐藏已完成的待办">
+        <span>隐藏已完成</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Main Workspace -->
+  <div class="workspace">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar" id="sidebarNav">
+      <div class="nav-section-title">视图筛选</div>
+      <div class="nav-item active" data-filter="all">
+        <div class="nav-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>全部待办</span>
+        </div>
+        <span class="nav-count" id="countAll">0</span>
+      </div>
+      <div class="nav-item" data-filter="active">
+        <div class="nav-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+          <span>进行中</span>
+        </div>
+        <span class="nav-count" id="countActive">0</span>
+      </div>
+      <div class="nav-item" data-filter="completed">
+        <div class="nav-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>已完成</span>
+        </div>
+        <span class="nav-count" id="countCompleted">0</span>
+      </div>
+
+      <div class="nav-section-title" style="margin-top:8px;">文档章节 (# 标题)</div>
+      <div id="sectionNavList" style="display:flex;flex-direction:column;gap:3px;"></div>
+    </aside>
+
+    <!-- Right Task List Area -->
+    <main class="main-pane">
+      <div class="pane-header">
+        <div class="pane-title-wrap">
+          <div class="pane-title">
+            <span id="currentViewTitle">全部待办</span>
+          </div>
+          <div class="progress-row">
+            <div class="progress-track">
+              <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <span id="progressText">0 / 0</span>
+          </div>
+        </div>
+
+        <div class="search-box">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" class="search-input" id="searchInput" placeholder="搜索待办或 #标签..." />
+        </div>
+      </div>
+
+      <!-- Compact Mode Filter Pills -->
+      <div class="compact-filters" id="compactFilters">
+        <span class="filter-pill active" data-filter="all">全部</span>
+        <span class="filter-pill" data-filter="active">进行中</span>
+        <span class="filter-pill" data-filter="completed">已完成</span>
+      </div>
+
+      <!-- Task List -->
+      <div class="task-list-container" id="taskListContainer"></div>
+
+      <!-- Bottom Quick Add Bar -->
+      <div class="add-bar">
+        <div class="add-input-wrap">
+          <svg class="add-plus-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <input type="text" class="add-input" id="newTaskInput" placeholder="添加新待办" />
+        </div>
+        <select class="section-select" id="sectionSelect" title="选择插入到哪个 Markdown 标题章节下">
+          <option value="__end__">追加到文档末尾</option>
+        </select>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Raw Markdown Modal -->
+<div class="modal-backdrop" id="rawModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>Markdown 实时源码预览与编辑</span>
+      <button class="icon-btn" id="btnCloseModal">✕</button>
+    </div>
+    <textarea class="raw-textarea" id="rawMarkdownTextarea"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="fluent-btn" id="btnDownloadMd">导出 .md 副本</button>
+      <button class="fluent-btn primary" id="btnSaveRawMd">应用并同步到文件</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toastMsg"></div>
+
+<script type="module">
+import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+const DEFAULT_MD = `# 今日重点工作
+
+- [ ] 完成产品周报整理并发送团队群 #工作 !高
+- [x] 检查并合并前端 Fluent UI 组件分支 #研发
+- [ ] 下午 15:00 与设计团队评审新图标规范 #会议
+
+# 个人生活与学习
+
+- [ ] 阅读《深入理解计算机系统》第 6 章 #阅读
+- [ ] 下班顺路购买咖啡豆和牛奶 #生活
+- [x] 整理桌面文件与备份本地笔记 #生活
+`;
+
+// Application State
+let rawContent = DEFAULT_MD;
+let currentFilePath = null;
+let pendingWrites = 0;
+let isPolling = false;
+let writeQueue = Promise.resolve();
+let currentFilter = "all"; // 'all' | 'active' | 'completed' | 'section:<name>'
+let hideCompletedTasks = false;
+let searchQuery = "";
+let editingLineIndex = null;
+
+// DOM Elements
+const appWindow = document.getElementById("appWindow");
+const syncDot = document.getElementById("syncDot");
+const syncStatusText = document.getElementById("syncStatusText");
+const fileNameLabel = document.getElementById("fileNameLabel");
+const taskListContainer = document.getElementById("taskListContainer");
+const sectionNavList = document.getElementById("sectionNavList");
+const sectionSelect = document.getElementById("sectionSelect");
+const newTaskInput = document.getElementById("newTaskInput");
+const searchInput = document.getElementById("searchInput");
+const currentViewTitle = document.getElementById("currentViewTitle");
+const progressBar = document.getElementById("progressBar");
+const progressText = document.getElementById("progressText");
+const countAll = document.getElementById("countAll");
+const countActive = document.getElementById("countActive");
+const countCompleted = document.getElementById("countCompleted");
+const toastMsg = document.getElementById("toastMsg");
+
+// Show toast helper
+let toastTimer = null;
+function showToast(text) {
+  toastMsg.textContent = text;
+  toastMsg.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastMsg.classList.remove("show"), 2400);
+}
+
+// Parse Markdown into lines, sections, and tasks while preserving 100% of non-task lines
+function parseMarkdown(mdText) {
+  const lines = mdText.replace(/\r\n/g, "\n").split("\n");
+  const sections = [];
+  const tasks = [];
+  let currentSection = "未分类";
+  let inCodeBlock = false;
+
+  const headingRegex = /^(#{1,6})\s+(.+?)\s*$/;
+  const taskRegex = /^(\s*)([-*+])\s+\[([ xX])\]\s+(.*)$/;
+
+  lines.forEach((line, idx) => {
+    if (/^\s*```/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+      return;
+    }
+    if (inCodeBlock) return;
+
+    const hMatch = line.match(headingRegex);
+    if (hMatch) {
+      currentSection = hMatch[2].trim();
+      if (!sections.find(s => s.name === currentSection)) {
+        sections.push({ name: currentSection, lineIndex: idx });
+      }
+      return;
+    }
+
+    const tMatch = line.match(taskRegex);
+    if (tMatch) {
+      const indent = tMatch[1] || "";
+      const bullet = tMatch[2];
+      const completed = tMatch[3].toLowerCase() === "x";
+      const rawTaskText = tMatch[4];
+
+      // Extract inline #tags and !priority for display badges
+      const tags = [];
+      let highPriority = false;
+      const cleanText = rawTaskText
+        .replace(/(?:^|\s)#([^\s#]+)/g, (_, tag) => {
+          tags.push(tag);
+          return "";
+        })
+        .replace(/(?:^|\s)!(高|紧急|high|!)/gi, () => {
+          highPriority = true;
+          return "";
+        })
+        .trim();
+
+      tasks.push({
+        lineIndex: idx,
+        indent,
+        bullet,
+        completed,
+        rawText: rawTaskText,
+        displayText: cleanText || rawTaskText,
+        tags,
+        highPriority,
+        section: currentSection,
+        isSubtask: indent.length >= 2
+      });
+    }
+  });
+
+  return { lines, sections, tasks };
+}
+
+function getFileName(path) {
+  if (path.startsWith("file://")) {
+    try { return decodeURIComponent(new URL(path).pathname.split("/").pop() || path); }
+    catch { /* Use the path separator fallback. */ }
+  }
+  return path.split(/[\\/]/).pop() || path;
+}
+
+function showLastSaved() {
+  const time = new Date().toLocaleTimeString();
+  syncStatusText.textContent = `实时同步中 · ${time}`;
+}
+
+// Writes open the file only for the duration of this operation.
+async function saveToMarkdownFile(newMdText, reason = "已保存") {
+  rawContent = newMdText;
+  renderApp();
+
+  if (!currentFilePath) {
+    syncStatusText.textContent = "演示模式 · 修改已保存在内存";
+    return;
+  }
+
+  const path = currentFilePath;
+  const snapshot = rawContent;
+  try {
+    pendingWrites += 1;
+    syncDot.classList.add("pulse");
+    const pendingWrite = writeQueue.then(() => invoke("write_md_file", { path, content: snapshot }));
+    writeQueue = pendingWrite.catch(() => {});
+    await pendingWrite;
+    if (path === currentFilePath) showLastSaved();
+  } catch (err) {
+    console.error("Save error:", err);
+    showToast("写入文件失败，请确认文件权限");
+  } finally {
+    setTimeout(() => syncDot.classList.remove("pulse"), 250);
+    pendingWrites = Math.max(0, pendingWrites - 1);
+  }
+}
+
+// Re-read briefly every 500ms; no file handle remains open between polls.
+async function pollExternalChanges() {
+  if (!currentFilePath || pendingWrites > 0 || isPolling || editingLineIndex !== null) return;
+  const path = currentFilePath;
+  isPolling = true;
+  try {
+    const diskText = await invoke("read_md_file", { path });
+    if (path === currentFilePath && diskText.replace(/\r\n/g, "\n") !== rawContent.replace(/\r\n/g, "\n")) {
+      rawContent = diskText;
+      renderApp();
+      syncStatusText.textContent = `检测到外部修改并刷新 · ${new Date().toLocaleTimeString()}`;
+      showToast("已同步外部编辑器对 .md 文件的修改");
+    }
+  } catch (err) {
+    // Ignore transient lock while another editor is mid-save
+  } finally {
+    isPolling = false;
+  }
+}
+setInterval(pollExternalChanges, 500);
+
+// Task Operations
+function toggleTask(lineIndex) {
+  const { lines } = parseMarkdown(rawContent);
+  const line = lines[lineIndex];
+  if (typeof line !== "string") return;
+  lines[lineIndex] = line.replace(/^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/, (_, prefix, state, suffix) => {
+    const nextState = state.toLowerCase() === "x" ? " " : "x";
+    return `${prefix}${nextState}${suffix}`;
+  });
+  saveToMarkdownFile(lines.join("\n"), "状态已更新");
+}
+
+function updateTaskText(lineIndex, newText) {
+  const trimmed = newText.trim();
+  editingLineIndex = null;
+  if (!trimmed) {
+    renderApp();
+    return;
+  }
+  const { lines } = parseMarkdown(rawContent);
+  const line = lines[lineIndex];
+  if (typeof line !== "string") return;
+  lines[lineIndex] = line.replace(/^(\s*[-*+]\s+\[[ xX]\]\s+).*$/, `$1${trimmed}`);
+  saveToMarkdownFile(lines.join("\n"), "内容已更新");
+}
+
+function toggleTaskPriority(lineIndex) {
+  const { lines } = parseMarkdown(rawContent);
+  const line = lines[lineIndex];
+  if (typeof line !== "string") return;
+  if (/(?:^|\s)!(高|紧急|high|!)/i.test(line)) {
+    lines[lineIndex] = line.replace(/(?:^|\s)!(高|紧急|high|!)/gi, "");
+  } else {
+    lines[lineIndex] = `${line.trimEnd()} !高`;
+  }
+  saveToMarkdownFile(lines.join("\n"), "优先级已切换");
+}
+
+function deleteTask(lineIndex) {
+  const { lines } = parseMarkdown(rawContent);
+  lines.splice(lineIndex, 1);
+  saveToMarkdownFile(lines.join("\n"), "已删除待办");
+  showToast("已从 Markdown 中删除该条待办");
+}
+
+function addNewTask() {
+  const text = newTaskInput.value.trim();
+  if (!text) return;
+
+  const targetSection = sectionSelect.value;
+  const { lines, sections, tasks } = parseMarkdown(rawContent);
+  const newTaskLine = `- [ ] ${text}`;
+
+  if (targetSection === "__end__" || sections.length === 0) {
+    // Append cleanly at end
+    if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+      lines.push(newTaskLine);
+    } else if (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+      lines[lines.length - 1] = newTaskLine;
+      lines.push("");
+    } else {
+      lines.push(newTaskLine);
+    }
+  } else {
+    // Find last task in that section, or insert right after the section heading
+    const secTasks = tasks.filter(t => t.section === targetSection);
+    if (secTasks.length > 0) {
+      const insertAfter = secTasks[secTasks.length - 1].lineIndex;
+      lines.splice(insertAfter + 1, 0, newTaskLine);
+    } else {
+      const secObj = sections.find(s => s.name === targetSection);
+      const insertAfter = secObj ? secObj.lineIndex : lines.length - 1;
+      lines.splice(insertAfter + 1, 0, newTaskLine);
+    }
+  }
+
+  newTaskInput.value = "";
+  saveToMarkdownFile(lines.join("\n"), "已新增待办");
+}
+
+// Render UI
+function renderApp() {
+  const { sections, tasks } = parseMarkdown(rawContent);
+
+  // Counts
+  const totalCount = tasks.length;
+  const completedCount = tasks.filter(t => t.completed).length;
+  const activeCount = totalCount - completedCount;
+  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  countAll.textContent = totalCount;
+  countActive.textContent = activeCount;
+  countCompleted.textContent = completedCount;
+  progressBar.style.width = `${pct}%`;
+  progressText.textContent = `${completedCount} / ${totalCount}`;
+  const completedButton = document.getElementById("btnClearCompleted");
+  completedButton.querySelector("span").textContent = hideCompletedTasks ? "显示已完成" : "隐藏已完成";
+  completedButton.title = hideCompletedTasks ? "仅在应用中显示已完成的待办" : "仅在应用中隐藏已完成的待办";
+
+  // Render Sidebar Sections
+  sectionNavList.innerHTML = "";
+  const prevSelectedSec = sectionSelect.value;
+  sectionSelect.innerHTML = `<option value="__end__">追加到文档末尾</option>`;
+
+  sections.forEach(sec => {
+    const secCount = tasks.filter(t => t.section === sec.name).length;
+    const navEl = document.createElement("div");
+    const filterKey = `section:${sec.name}`;
+    navEl.className = `nav-item ${currentFilter === filterKey ? "active" : ""}`;
+    navEl.innerHTML = `
+      <div class="nav-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3L8 21"/><path d="M16 3l-2 18"/></svg>
+        <span>${escapeHtml(sec.name)}</span>
+      </div>
+      <span class="nav-count">${secCount}</span>
+    `;
+    navEl.addEventListener("click", () => setFilter(filterKey, sec.name));
+    sectionNavList.appendChild(navEl);
+
+    const opt = document.createElement("option");
+    opt.value = sec.name;
+    opt.textContent = `章节: ${sec.name}`;
+    sectionSelect.appendChild(opt);
+  });
+
+  if ([...sectionSelect.options].some(o => o.value === prevSelectedSec)) {
+    sectionSelect.value = prevSelectedSec;
+  }
+
+  // Filter Tasks
+  const filteredTasks = tasks.filter(t => {
+    if (hideCompletedTasks && t.completed) return false;
+    if (currentFilter === "active" && t.completed) return false;
+    if (currentFilter === "completed" && !t.completed) return false;
+    if (currentFilter.startsWith("section:")) {
+      const targetSec = currentFilter.slice(8);
+      if (t.section !== targetSec) return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!t.rawText.toLowerCase().includes(q) && !t.section.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Render Task Cards grouped by Section
+  taskListContainer.innerHTML = "";
+  if (filteredTasks.length === 0) {
+    taskListContainer.innerHTML = `
+      <div class="empty-state">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="9" y1="15" x2="15" y2="15"></line>
+        </svg>
+        <div style="font-size:14px;font-weight:600;">暂无匹配的待办事项</div>
+        <div style="font-size:12px;">在下方输入框按 Enter 即可直接向 Markdown 文件写入新待办 (` + "`- [ ] ...`" + `)</div>
+      </div>
+    `;
+    return;
+  }
+
+  let lastRenderedSection = null;
+  filteredTasks.forEach(task => {
+    if (task.section !== lastRenderedSection && !currentFilter.startsWith("section:")) {
+      lastRenderedSection = task.section;
+      const headerEl = document.createElement("div");
+      headerEl.className = "section-group-header";
+      headerEl.innerHTML = `<span># ${escapeHtml(task.section)}</span>`;
+      taskListContainer.appendChild(headerEl);
+    }
+
+    const card = document.createElement("div");
+    card.className = `task-card ${task.completed ? "completed" : ""} ${task.isSubtask ? "subtask" : ""}`;
+
+    // Checkbox
+    const checkbox = document.createElement("div");
+    checkbox.className = "fluent-checkbox";
+    checkbox.title = task.completed ? "点击取消完成 (- [ ])" : "点击标记完成 (- [x])";
+    checkbox.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+    checkbox.addEventListener("click", () => toggleTask(task.lineIndex));
+
+    // Body
+    const body = document.createElement("div");
+    body.className = "task-body";
+
+    if (editingLineIndex === task.lineIndex) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "task-edit-input";
+      input.value = task.rawText;
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") updateTaskText(task.lineIndex, input.value);
+        if (e.key === "Escape") {
+          editingLineIndex = null;
+          renderApp();
+        }
+      });
+      input.addEventListener("blur", () => updateTaskText(task.lineIndex, input.value));
+      body.appendChild(input);
+      setTimeout(() => input.focus(), 10);
+    } else {
+      const row = document.createElement("div");
+      row.className = "task-text-row";
+
+      const textSpan = document.createElement("span");
+      textSpan.className = "task-text";
+      textSpan.textContent = task.displayText;
+      textSpan.title = "双击直接修改此条待办文字";
+      textSpan.addEventListener("dblclick", () => {
+        editingLineIndex = task.lineIndex;
+        renderApp();
+      });
+      row.appendChild(textSpan);
+
+      if (task.highPriority) {
+        const pBadge = document.createElement("span");
+        pBadge.className = "badge badge-priority-high";
+        pBadge.textContent = "重要";
+        row.appendChild(pBadge);
+      }
+
+      task.tags.forEach(tag => {
+        const tBadge = document.createElement("span");
+        tBadge.className = "badge badge-tag";
+        tBadge.textContent = `#${tag}`;
+        row.appendChild(tBadge);
+      });
+
+      const lineBadge = document.createElement("span");
+      lineBadge.className = "badge-line";
+      lineBadge.textContent = `L${task.lineIndex + 1}`;
+      row.appendChild(lineBadge);
+
+      body.appendChild(row);
+    }
+
+    // Hover Actions
+    const actions = document.createElement("div");
+    actions.className = "task-actions";
+
+    const btnStar = document.createElement("button");
+    btnStar.className = "task-action-btn";
+    btnStar.title = "切换重要优先级 (!高)";
+    btnStar.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${task.highPriority ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    btnStar.addEventListener("click", () => toggleTaskPriority(task.lineIndex));
+
+    const btnEdit = document.createElement("button");
+    btnEdit.className = "task-action-btn";
+    btnEdit.title = "编辑待办内容";
+    btnEdit.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
+    btnEdit.addEventListener("click", () => {
+      editingLineIndex = task.lineIndex;
+      renderApp();
+    });
+
+    const btnDel = document.createElement("button");
+    btnDel.className = "task-action-btn delete";
+    btnDel.title = "从 .md 文件中删除此待办";
+    btnDel.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+    btnDel.addEventListener("click", () => deleteTask(task.lineIndex));
+
+    actions.appendChild(btnStar);
+    actions.appendChild(btnEdit);
+    actions.appendChild(btnDel);
+
+    card.appendChild(checkbox);
+    card.appendChild(body);
+    card.appendChild(actions);
+    taskListContainer.appendChild(card);
+  });
+}
+
+function setFilter(filterKey, customLabel) {
+  currentFilter = filterKey;
+  document.querySelectorAll("#sidebarNav .nav-item[data-filter]").forEach(el => {
+    el.classList.toggle("active", el.dataset.filter === filterKey);
+  });
+  document.querySelectorAll("#compactFilters .filter-pill").forEach(el => {
+    el.classList.toggle("active", el.dataset.filter === filterKey);
+  });
+
+  const titles = {
+    all: "全部待办",
+    active: "进行中",
+    completed: "已完成"
+  };
+  currentViewTitle.textContent = customLabel ? `# ${customLabel}` : (titles[filterKey] || "全部待办");
+  renderApp();
+}
+
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, m => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[m]));
+}
+
+// Native file picker: Open an existing Markdown file.
+document.getElementById("btnOpenFile").addEventListener("click", async () => {
+  try {
+    const path = await openFileDialog({
+      multiple: false,
+      filters: [{ name: "Markdown 文档", extensions: ["md", "markdown", "txt"] }]
+    });
+    if (!path) return;
+    await invoke("remember_md_file", { path });
+    const content = await invoke("read_md_file", { path });
+    currentFilePath = path;
+    rawContent = content;
+    fileNameLabel.textContent = getFileName(path);
+    syncStatusText.textContent = `实时监听中 · ${new Date().toLocaleTimeString()}`;
+    renderApp();
+    showToast(`已载入并实时监听 ${getFileName(path)}`);
+  } catch (err) {
+    console.error("Open error:", err);
+    showToast("无法打开文件，请确认文件权限");
+  }
+});
+
+// Native save picker: Create and bind a new Markdown file.
+document.getElementById("btnCreateFile").addEventListener("click", async () => {
+  try {
+    const path = await saveFileDialog({
+      defaultPath: "todo.md",
+      filters: [{ name: "Markdown 文档", extensions: ["md"] }]
+    });
+    if (!path) return;
+    currentFilePath = path;
+    await invoke("remember_md_file", { path });
+    fileNameLabel.textContent = getFileName(path);
+    await saveToMarkdownFile(rawContent, "新建文件");
+    showToast(`已创建并绑定 ${getFileName(path)}`);
+  } catch (err) {
+    console.error("Create error:", err);
+    showToast("无法创建文件，请确认文件权限");
+  }
+});
+
+// Event Listeners
+document.querySelectorAll("#sidebarNav .nav-item[data-filter]").forEach(el => {
+  el.addEventListener("click", () => setFilter(el.dataset.filter));
+});
+document.querySelectorAll("#compactFilters .filter-pill").forEach(el => {
+  el.addEventListener("click", () => setFilter(el.dataset.filter));
+});
+
+newTaskInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") addNewTask();
+});
+
+document.getElementById("btnClearCompleted").addEventListener("click", () => {
+  hideCompletedTasks = !hideCompletedTasks;
+  renderApp();
+});
+
+searchInput.addEventListener("input", e => {
+  searchQuery = e.target.value.trim();
+  renderApp();
+});
+
+// Opacity Slider
+document.getElementById("opacitySlider").addEventListener("input", e => {
+  const val = Number(e.target.value) / 100;
+  document.documentElement.style.setProperty("--bg-alpha", val.toFixed(2));
+  document.documentElement.style.setProperty("--card-alpha", Math.min(0.95, val + 0.08).toFixed(2));
+});
+
+// Frameless window controls, drag and edge resize transitions.
+if (window.__TAURI_INTERNALS__) {
+  const nativeWindow = getCurrentWindow();
+  const windowsBackdrop = /Windows/i.test(navigator.userAgent);
+  const restoreFluentSurface = () => document.body.classList.remove("window-solid-drag");
+  listen("window-move-finished", () => restoreFluentSurface());
+  const startNativeMove = async (kind, direction) => {
+    document.body.classList.add("window-solid-drag");
+    try {
+      await invoke(kind === "resize" ? "begin_window_resize" : "begin_window_drag", direction ? { direction } : {});
+    } catch (error) {
+      console.error("Could not start native window movement:", error);
+      restoreFluentSurface();
+      if (kind === "resize") await nativeWindow.startResizeDragging(direction);
+      else await nativeWindow.startDragging();
+    }
+  };
+  document.getElementById("btnMinimize").addEventListener("click", () => nativeWindow.minimize());
+  document.getElementById("btnMaximize").addEventListener("click", () => nativeWindow.toggleMaximize());
+  document.getElementById("btnCloseWindow").addEventListener("click", () => nativeWindow.close());
+  const autoStartButton = document.getElementById("btnAutoStart");
+  const refreshAutoStartButton = async () => {
+    try {
+      const enabled = await invoke("get_autostart_state");
+      autoStartButton.classList.toggle("active", enabled);
+      autoStartButton.title = enabled ? "已开启开机自启动" : "开启开机自启动";
+      autoStartButton.setAttribute("aria-pressed", String(enabled));
+    } catch (error) { console.error("Could not read auto-start setting:", error); }
+  };
+  autoStartButton.addEventListener("click", async () => {
+    const enable = !autoStartButton.classList.contains("active");
+    try {
+      await invoke("set_autostart_state", { enabled: enable });
+      await refreshAutoStartButton();
+      showToast(enable ? "已开启开机自启动" : "已关闭开机自启动");
+    } catch (error) {
+      console.error("Could not update auto-start setting:", error);
+      showToast("修改自启动设置失败");
+    }
+  });
+  refreshAutoStartButton();
+  document.querySelector(".titlebar").addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.target.closest("button, input, select, a")) return;
+    event.preventDefault();
+    if (windowsBackdrop) startNativeMove("drag");
+    else nativeWindow.startDragging();
+  });
+  if (windowsBackdrop) {
+    const edge = 7;
+    const resizeDirections = {
+      "North": "ns-resize", "South": "ns-resize", "East": "ew-resize", "West": "ew-resize",
+      "NorthWest": "nwse-resize", "SouthEast": "nwse-resize", "NorthEast": "nesw-resize", "SouthWest": "nesw-resize"
+    };
+    document.addEventListener("pointermove", event => {
+      if (event.buttons) return;
+      const x = event.clientX, y = event.clientY, w = innerWidth, h = innerHeight;
+      const north = y < edge, south = y >= h - edge, west = x < edge, east = x >= w - edge;
+      const direction = north && west ? "NorthWest" : north && east ? "NorthEast" : south && west ? "SouthWest" : south && east ? "SouthEast" : north ? "North" : south ? "South" : west ? "West" : east ? "East" : null;
+      document.documentElement.style.cursor = direction ? resizeDirections[direction] : "";
+    });
+    document.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || event.target.closest("button, input, select, textarea, a, [contenteditable='true']")) return;
+      const x = event.clientX, y = event.clientY, w = innerWidth, h = innerHeight;
+      const north = y < edge, south = y >= h - edge, west = x < edge, east = x >= w - edge;
+      const direction = north && west ? "NorthWest" : north && east ? "NorthEast" : south && west ? "SouthWest" : south && east ? "SouthEast" : north ? "North" : south ? "South" : west ? "West" : east ? "East" : null;
+      if (!direction) return;
+      event.preventDefault();
+      event.stopPropagation();
+      startNativeMove("resize", direction);
+    }, true);
+  }
+}
+
+// Compact Mode Toggle
+document.getElementById("btnCompact").addEventListener("click", e => {
+  appWindow.classList.toggle("compact-mode");
+  e.currentTarget.classList.toggle("active");
+});
+
+// Theme Toggle
+document.getElementById("btnTheme").addEventListener("click", () => {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  if (isDark) {
+    document.documentElement.removeAttribute("data-theme");
+    document.body.classList.remove("dark-backdrop");
+  } else {
+    document.documentElement.setAttribute("data-theme", "dark");
+    document.body.classList.add("dark-backdrop");
+  }
+});
+
+// Raw Markdown Modal
+const rawModal = document.getElementById("rawModal");
+const rawMarkdownTextarea = document.getElementById("rawMarkdownTextarea");
+
+document.getElementById("btnRawMd").addEventListener("click", () => {
+  rawMarkdownTextarea.value = rawContent;
+  rawModal.classList.add("open");
+});
+
+document.getElementById("btnCloseModal").addEventListener("click", () => {
+  rawModal.classList.remove("open");
+});
+
+document.getElementById("btnSaveRawMd").addEventListener("click", () => {
+  saveToMarkdownFile(rawMarkdownTextarea.value, "源码修改已同步");
+  rawModal.classList.remove("open");
+  showToast("源码修改已实时写回文件");
+});
+
+document.getElementById("btnDownloadMd").addEventListener("click", async () => {
+  try {
+    const path = await saveFileDialog({
+      defaultPath: "todo.md",
+      filters: [{ name: "Markdown 文档", extensions: ["md"] }]
+    });
+    if (!path) return;
+    await writeTextFile(path, rawMarkdownTextarea.value);
+    showToast("Markdown 副本已导出");
+  } catch (err) {
+    console.error("Export error:", err);
+    showToast("导出失败，请确认文件权限");
+  }
+});
+
+// Auto-detect OS Dark Mode
+// Tauri desktop uses a transparent window surface so only the Fluent panel is visible;
+// keep the decorative gradient when opened directly in a browser preview.
+if (window.__TAURI_INTERNALS__) {
+  document.body.classList.add("pure-transparent");
+}
+if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+  document.documentElement.setAttribute("data-theme", "dark");
+  document.body.classList.add("dark-backdrop");
+}
+
+// Read the last selected document through Rust: Tauri's file-dialog scope is temporary
+// and does not grant the previous file path again after an app restart.
+if (window.__TAURI_INTERNALS__) {
+  (async () => {
+    try {
+      const legacyPath = localStorage.getItem("fluent-md-todo:last-file");
+      if (legacyPath) {
+        await invoke("remember_md_file", { path: legacyPath });
+        localStorage.removeItem("fluent-md-todo:last-file");
+      }
+      const lastFile = await invoke("read_last_md_file");
+      if (lastFile) {
+        currentFilePath = lastFile.path;
+        rawContent = lastFile.content;
+        fileNameLabel.textContent = getFileName(lastFile.path);
+        syncStatusText.textContent = `实时监听中 · ${new Date().toLocaleTimeString()}`;
+      }
+    } catch (error) {
+      console.error("Could not restore the last Markdown file:", error);
+      showToast("上次的 Markdown 文件无法读取，请重新选择一次");
+    } finally {
+      renderApp();
+    }
+  })();
+} else {
+  renderApp();
+}
+</script>
+</body>
+</html>
