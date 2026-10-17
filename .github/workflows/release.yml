@@ -1,0 +1,52 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: "--bundles nsis"
+          - platform: macos-latest
+            args: "--target universal-apple-darwin --bundles app,dmg"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.90.0
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "Fluent MD Todo v__VERSION__"
+          releaseBody: |
+            Fluent MD Todo 首个发布版本。
+
+            - 以 Fluent 风格管理 Markdown 待办清单（`- [ ]` / `- [x]`），支持标题与嵌套任务、搜索、筛选、优先级与标签
+            - 应用内修改即时写回 Markdown 文件，并自动同步其他编辑器对文件的更改
+            - 原生文件对话框、原始 Markdown 编辑与导出、主题 / 透明度 / 紧凑视图
+
+            macOS：通用版（Apple Silicon + Intel）DMG，未签名，首次打开请右键点 App 选「打开」。
+            Windows：NSIS 安装包。
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
