@@ -25,6 +25,9 @@
     --danger-bg: rgba(196, 43, 28, 0.10);
     --success: #0f7b0f;
     --warning: #d83b01;
+    --slider-filled: #2b2d31;
+    --slider-rest: rgba(0, 0, 0, 0.20);
+    --slider-thumb: #2b2d31;
     --shadow-window: 0 20px 50px rgba(0, 0, 0, 0.16), 0 4px 14px rgba(0, 0, 0, 0.06);
     --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.03);
     --radius-window: 12px;
@@ -49,6 +52,9 @@
     --danger-bg: rgba(255, 153, 164, 0.14);
     --success: #6ccb5f;
     --warning: #fce100;
+    --slider-filled: #ffffff;
+    --slider-rest: rgba(255, 255, 255, 0.30);
+    --slider-thumb: #ffffff;
     --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.48), 0 4px 16px rgba(0, 0, 0, 0.28);
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.18);
   }
@@ -102,6 +108,12 @@
     background: rgba(var(--surface-rgb), calc(var(--bg-alpha) * 0.54));
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+  /* Light theme only: the linear curve still looked gray at max opacity, so
+     ease the surface toward solid white near the top of the slider range.
+     The dark theme keeps the original curve above. */
+  html:not([data-theme="dark"]) body.pure-transparent .fluent-window {
+    background: rgba(var(--surface-rgb), calc(var(--bg-alpha) * var(--bg-alpha) * 0.97));
   }
   body.pure-transparent.window-solid-drag .fluent-window {
     /* Keep the desktop material enabled underneath this opaque moving surface. */
@@ -254,6 +266,53 @@
 
   .window-control svg { width: 12px; height: 12px; }
 
+  /* macOS traffic lights: only shown on Mac (body.is-mac), where the Windows
+     window controls on the right are hidden so the other titlebar actions
+     slide over and take their place. */
+  .mac-traffic-lights {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    margin-right: 4px;
+    -webkit-app-region: no-drag;
+  }
+
+  body.is-mac .mac-traffic-lights {
+    display: flex;
+  }
+
+  body.is-mac .window-controls {
+    display: none;
+  }
+
+  .traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0, 0, 0, 0.18);
+    padding: 0;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: rgba(0, 0, 0, 0.55);
+  }
+
+  .traffic-light.close { background: #ff5f57; }
+  .traffic-light.minimize { background: #febc2e; }
+  .traffic-light.maximize { background: #28c840; }
+
+  .traffic-light svg {
+    width: 8px;
+    height: 8px;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .mac-traffic-lights:hover .traffic-light svg {
+    opacity: 1;
+  }
+
   .icon-btn {
     height: 30px;
     min-width: 30px;
@@ -294,18 +353,51 @@
     color: var(--text-secondary);
   }
 
+  /* Monochrome thin-line slider: filled part / rest part swap with the theme */
   .opacity-slider {
+    -webkit-appearance: none;
+    appearance: none;
     width: 64px;
-    height: 4px;
-    accent-color: var(--accent);
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--slider-filled) 0%, var(--slider-filled) var(--opacity-pct, 65%), var(--slider-rest) var(--opacity-pct, 65%), var(--slider-rest) 100%);
+    outline: none;
     cursor: pointer;
+  }
+
+  .opacity-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--slider-thumb);
+    border: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+  }
+
+  .opacity-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--slider-thumb);
+    border: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+  }
+
+  .opacity-slider::-moz-range-track {
+    height: 2px;
+    border-radius: 999px;
+    background: transparent;
   }
 
   /* Toolbar / File Selection Bar */
   .file-toolbar {
     padding: 12px 18px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
     border-bottom: 1px solid var(--border-subtle);
@@ -315,8 +407,9 @@
 
   .file-info {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     min-width: 0;
     flex: 1;
   }
@@ -332,10 +425,37 @@
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text-primary);
-    max-width: 280px;
+    max-width: 320px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .file-pill:hover {
+    border-color: var(--border-strong);
+  }
+
+  .file-pill-chevron {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform 0.18s ease;
+  }
+
+  .file-pill.open .file-pill-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* File actions (open / create .md) expand under the file name pill */
+  .file-actions-panel {
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .file-actions-panel.open {
+    display: flex;
   }
 
   .file-meta {
@@ -678,8 +798,8 @@
   }
 
   .task-card.completed .fluent-checkbox {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--text-primary);
+    border-color: var(--text-primary);
   }
 
   .fluent-checkbox svg {
@@ -709,6 +829,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    cursor: pointer;
   }
 
   .task-text-row {
@@ -724,7 +845,7 @@
     color: var(--text-primary);
     word-break: break-word;
     user-select: text;
-    cursor: text;
+    cursor: pointer;
   }
 
   .task-card.completed .task-text {
@@ -738,7 +859,7 @@
     font-family: inherit;
     padding: 3px 8px;
     border-radius: 4px;
-    border: 1.5px solid var(--accent);
+    border: 1.5px solid var(--border-strong);
     background: rgba(var(--card-rgb), 0.95);
     color: var(--text-primary);
     outline: none;
@@ -760,12 +881,6 @@
     background: var(--danger-bg);
     color: var(--danger);
     font-weight: 600;
-  }
-
-  .badge-line {
-    font-size: 10.5px;
-    color: var(--text-muted);
-    font-family: Consolas, monospace;
   }
 
   .task-actions {
@@ -828,7 +943,6 @@
     padding: 0 12px 0 36px;
     border-radius: var(--radius-control);
     border: 1px solid var(--border-subtle);
-    border-bottom: 2px solid var(--accent);
     background: rgba(var(--card-rgb), 0.85);
     color: var(--text-primary);
     font-size: 13.5px;
@@ -969,6 +1083,17 @@
   <!-- Windows 11 Fluent Titlebar -->
   <header class="titlebar">
     <div class="brand">
+      <div class="mac-traffic-lights" aria-label="窗口控制">
+        <button class="traffic-light close" id="btnMacClose" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M1.5 1.5l5 5M6.5 1.5l-5 5"/></svg>
+        </button>
+        <button class="traffic-light minimize" id="btnMacMinimize" title="最小化" aria-label="最小化">
+          <svg viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M1 4h6"/></svg>
+        </button>
+        <button class="traffic-light maximize" id="btnMacMaximize" title="最大化 / 还原" aria-label="最大化或还原">
+          <svg viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M4 1.2v5.6M1.2 4h5.6"/></svg>
+        </button>
+      </div>
       <div class="brand-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 11 12 14 22 4"></polyline>
@@ -1021,29 +1146,33 @@
   <!-- File Selection & Sync Toolbar -->
   <section class="file-toolbar">
     <div class="file-info">
-      <div class="file-pill" id="currentFileName" title="当前关联的 Markdown 文件">
+      <div class="file-pill" id="currentFileName" title="点击展开 / 收起文件操作（选择或新建 .md）">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
           <polyline points="14 2 14 8 20 8"></polyline>
         </svg>
         <span id="fileNameLabel">未选择本地文件（当前为内置演示清单）</span>
+        <svg class="file-pill-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </div>
+      <div class="file-actions-panel" id="fileActionsPanel">
+        <button class="fluent-btn primary" id="btnOpenFile">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>选择 .md 文件</span>
+        </button>
+        <button class="fluent-btn" id="btnCreateFile" title="新建一个本地 Markdown 待办文件并实时绑定">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>新建 .md</span>
+        </button>
+      </div>
+
     </div>
 
     <div class="btn-group">
-      <button class="fluent-btn primary" id="btnOpenFile">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-        </svg>
-        <span>选择 .md 文件</span>
-      </button>
-      <button class="fluent-btn" id="btnCreateFile" title="新建一个本地 Markdown 待办文件并实时绑定">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        <span>新建 .md</span>
-      </button>
       <button class="fluent-btn" id="btnClearCompleted" title="仅在应用中隐藏已完成的待办">
         <span>隐藏已完成</span>
       </button>
@@ -1196,6 +1325,11 @@ const countAll = document.getElementById("countAll");
 const countActive = document.getElementById("countActive");
 const countCompleted = document.getElementById("countCompleted");
 const toastMsg = document.getElementById("toastMsg");
+
+// Platform: on macOS the titlebar shows traffic lights on the left instead of
+// the Windows-style window controls on the right (see body.is-mac CSS rules).
+const isMacPlatform = /Macintosh|Mac OS X/i.test(navigator.userAgent) || (navigator.platform || "").startsWith("Mac");
+if (isMacPlatform) document.body.classList.add("is-mac");
 
 // Show toast helper
 let toastTimer = null;
@@ -1544,11 +1678,7 @@ function renderApp() {
       const textSpan = document.createElement("span");
       textSpan.className = "task-text";
       textSpan.textContent = task.displayText;
-      textSpan.title = "双击直接修改此条待办文字";
-      textSpan.addEventListener("dblclick", () => {
-        editingLineIndex = task.lineIndex;
-        renderApp();
-      });
+      textSpan.title = "点击直接修改此条待办文字";
       row.appendChild(textSpan);
 
       if (task.highPriority) {
@@ -1564,11 +1694,6 @@ function renderApp() {
         tBadge.textContent = `#${tag}`;
         row.appendChild(tBadge);
       });
-
-      const lineBadge = document.createElement("span");
-      lineBadge.className = "badge-line";
-      lineBadge.textContent = `L${task.lineIndex + 1}`;
-      row.appendChild(lineBadge);
 
       body.appendChild(row);
     }
@@ -1602,6 +1727,15 @@ function renderApp() {
     actions.appendChild(btnEdit);
     actions.appendChild(btnDel);
 
+    // Clicking the card itself (anywhere except the checkbox and the
+    // star/edit/delete buttons) enters edit mode directly.
+    card.addEventListener("click", e => {
+      if (editingLineIndex === task.lineIndex) return;
+      if (e.target.closest(".fluent-checkbox, .task-actions")) return;
+      editingLineIndex = task.lineIndex;
+      renderApp();
+    });
+
     card.appendChild(checkbox);
     card.appendChild(body);
     card.appendChild(actions);
@@ -1625,6 +1759,18 @@ function setFilter(filterKey, customLabel) {
   };
   currentViewTitle.textContent = customLabel ? `# ${customLabel}` : (titles[filterKey] || "全部待办");
   renderApp();
+
+  // Quick-add target follows the current view: entering a section points the
+  // bottom-right selector at that section; other views reset it to append-at-end.
+  // (A later manual change of the selector is preserved by renderApp as before.)
+  if (filterKey.startsWith("section:")) {
+    const targetSec = filterKey.slice(8);
+    if ([...sectionSelect.options].some(o => o.value === targetSec)) {
+      sectionSelect.value = targetSec;
+    }
+  } else {
+    sectionSelect.value = "__end__";
+  }
 }
 
 function escapeHtml(str) {
@@ -1632,6 +1778,20 @@ function escapeHtml(str) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[m]));
 }
+
+// File name pill expands / collapses the open & create .md actions underneath it.
+const filePill = document.getElementById("currentFileName");
+const fileActionsPanel = document.getElementById("fileActionsPanel");
+filePill.addEventListener("click", () => {
+  fileActionsPanel.classList.toggle("open");
+  filePill.classList.toggle("open");
+});
+["btnOpenFile", "btnCreateFile"].forEach(id => {
+  document.getElementById(id).addEventListener("click", () => {
+    fileActionsPanel.classList.remove("open");
+    filePill.classList.remove("open");
+  });
+});
 
 // Native file picker: Open an existing Markdown file.
 document.getElementById("btnOpenFile").addEventListener("click", async () => {
@@ -1697,11 +1857,17 @@ searchInput.addEventListener("input", e => {
 });
 
 // Opacity Slider
-document.getElementById("opacitySlider").addEventListener("input", e => {
-  const val = Number(e.target.value) / 100;
+const opacitySlider = document.getElementById("opacitySlider");
+function applyOpacity(rawValue) {
+  const num = Number(rawValue);
+  const val = num / 100;
   document.documentElement.style.setProperty("--bg-alpha", val.toFixed(2));
   document.documentElement.style.setProperty("--card-alpha", Math.min(0.95, val + 0.08).toFixed(2));
-});
+  const pct = ((num - Number(opacitySlider.min)) / (Number(opacitySlider.max) - Number(opacitySlider.min))) * 100;
+  opacitySlider.style.setProperty("--opacity-pct", `${pct.toFixed(1)}%`);
+}
+opacitySlider.addEventListener("input", e => applyOpacity(e.target.value));
+applyOpacity(opacitySlider.value);
 
 // Frameless window controls, drag and edge resize transitions.
 if (window.__TAURI_INTERNALS__) {
@@ -1723,6 +1889,10 @@ if (window.__TAURI_INTERNALS__) {
   document.getElementById("btnMinimize").addEventListener("click", () => nativeWindow.minimize());
   document.getElementById("btnMaximize").addEventListener("click", () => nativeWindow.toggleMaximize());
   document.getElementById("btnCloseWindow").addEventListener("click", () => nativeWindow.close());
+  // macOS traffic lights (visible only on Mac) mirror the Windows controls.
+  document.getElementById("btnMacClose").addEventListener("click", () => nativeWindow.close());
+  document.getElementById("btnMacMinimize").addEventListener("click", () => nativeWindow.minimize());
+  document.getElementById("btnMacMaximize").addEventListener("click", () => nativeWindow.toggleMaximize());
   const autoStartButton = document.getElementById("btnAutoStart");
   const refreshAutoStartButton = async () => {
     try {
