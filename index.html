@@ -455,6 +455,18 @@
     box-shadow: var(--shadow-card);
   }
 
+  /* Long file names ellipsize instead of pushing the right-side button out */
+  #fileNameLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .file-toolbar .btn-group {
+    flex-shrink: 0;
+  }
+
   /* Anchor for the dropdown: shrink-wraps to the file pill's width */
   .file-menu {
     position: relative;
@@ -473,6 +485,7 @@
     font-weight: 600;
     color: var(--text-primary);
     max-width: 320px;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -635,6 +648,21 @@
   /* While squeezed, the sidebar toggle is locked (clicking does nothing) */
   .fluent-window.auto-narrow .sidebar-toggle {
     opacity: 0.45;
+  }
+
+  /* Squeezed titlebar: the brand text also goes, so the icon-only actions on
+     the right always fit instead of being clipped at the window edge. */
+  .fluent-window.auto-narrow .brand > span {
+    display: none;
+  }
+
+  .fluent-window.auto-narrow .titlebar {
+    padding: 0 10px;
+  }
+
+  .fluent-window.auto-narrow .window-controls {
+    margin-left: 4px;
+    padding-left: 4px;
   }
 
   .nav-section-title {
