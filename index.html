@@ -40,8 +40,8 @@
     --card-rgb: 45, 48, 56;
     --card-hover-rgb: 54, 58, 68;
     --text-primary: #f3f4f6;
-    --text-secondary: #a6abb4;
-    --text-muted: #6e737d;
+    --text-secondary: #ccd1da;
+    --text-muted: #9aa1ad;
     --accent: #60cdff;
     --accent-hover: #7ad5ff;
     --accent-light: rgba(96, 205, 255, 0.14);
@@ -104,16 +104,11 @@
     border-radius: 0;
     border: 0;
     box-shadow: none;
-    /* Reveal more of the Windows system blur while keeping the todo cards readable. */
-    background: rgba(var(--surface-rgb), calc(var(--bg-alpha) * 0.54));
+    /* The surface eases toward fully solid at the top of the opacity range
+       (light: near-white, dark: deep solid), instead of staying washed out. */
+    background: rgba(var(--surface-rgb), calc(var(--bg-alpha) * var(--bg-alpha) * 0.97));
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-  }
-  /* Light theme only: the linear curve still looked gray at max opacity, so
-     ease the surface toward solid white near the top of the slider range.
-     The dark theme keeps the original curve above. */
-  html:not([data-theme="dark"]) body.pure-transparent .fluent-window {
-    background: rgba(var(--surface-rgb), calc(var(--bg-alpha) * var(--bg-alpha) * 0.97));
   }
   body.pure-transparent.window-solid-drag .fluent-window {
     /* Keep the desktop material enabled underneath this opaque moving surface. */
@@ -159,7 +154,7 @@
   }
 
   .fluent-window.compact-mode {
-    max-width: 420px;
+    max-width: 380px;
     height: min(82vh, 640px);
   }
 
@@ -1330,7 +1325,7 @@
 <script type="module">
 import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 const DEFAULT_MD = `# 今日重点工作
@@ -2002,10 +1997,27 @@ if (window.__TAURI_INTERNALS__) {
   }
 }
 
-// Compact Mode Toggle
-document.getElementById("btnCompact").addEventListener("click", e => {
-  appWindow.classList.toggle("compact-mode");
-  e.currentTarget.classList.toggle("active");
+// Compact Mode Toggle: also shrinks the native window (the old CSS max-width
+// alone could not get past the window's own size / min-width).
+let sizeBeforeCompact = null;
+document.getElementById("btnCompact").addEventListener("click", async e => {
+  const isCompact = appWindow.classList.toggle("compact-mode");
+  e.currentTarget.classList.toggle("active", isCompact);
+  if (!window.__TAURI_INTERNALS__) return;
+  try {
+    const nativeWin = getCurrentWindow();
+    const factor = await nativeWin.scaleFactor();
+    if (isCompact) {
+      const physical = await nativeWin.innerSize();
+      sizeBeforeCompact = physical.toLogical(factor);
+      await nativeWin.setSize(new LogicalSize(380, sizeBeforeCompact.height));
+    } else if (sizeBeforeCompact) {
+      await nativeWin.setSize(new LogicalSize(sizeBeforeCompact.width, sizeBeforeCompact.height));
+      sizeBeforeCompact = null;
+    }
+  } catch (error) {
+    console.error("Could not resize window for compact mode:", error);
+  }
 });
 
 // Theme Toggle
