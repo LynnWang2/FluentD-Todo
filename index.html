@@ -2169,10 +2169,21 @@ if (window.__TAURI_INTERNALS__) {
   document.getElementById("btnMinimize").addEventListener("click", () => nativeWindow.minimize());
   document.getElementById("btnMaximize").addEventListener("click", () => nativeWindow.toggleMaximize());
   document.getElementById("btnCloseWindow").addEventListener("click", () => nativeWindow.close());
-  // Maximized windows are square on macOS too: drop the corner radius then.
-  nativeWindow.onResized?.(async () => {
-    document.body.classList.toggle("window-maximized", await nativeWindow.isMaximized());
-  });
+  // Round the whole native window on macOS (the page surface AND the frosted
+  // layer behind it) to the system corner radius; maximized = square, like
+  // native windows. A CSS radius alone leaves the square backdrop showing.
+  const syncCornerRadius = async () => {
+    if (!document.body.classList.contains("is-mac")) return;
+    try {
+      const maximized = await nativeWindow.isMaximized();
+      document.body.classList.toggle("window-maximized", maximized);
+      await invoke("set_window_corner_radius", { radius: maximized ? 0 : 16 });
+    } catch (error) {
+      console.error("Could not set window corner radius:", error);
+    }
+  };
+  syncCornerRadius();
+  nativeWindow.onResized?.(syncCornerRadius);
   // macOS traffic lights (visible only on Mac) mirror the Windows controls.
   document.getElementById("btnMacClose").addEventListener("click", () => nativeWindow.close());
   document.getElementById("btnMacMinimize").addEventListener("click", () => nativeWindow.minimize());

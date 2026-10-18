@@ -121,8 +121,7 @@ fn get_autostart_state(_app: tauri::AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn set_autostart_state(_app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
+fn set_autostart_state(_app: tauri::AppHandle, enabled: bool) -> Result<(), String> {    #[cfg(target_os = "windows")]
     return windows_autostart::set_enabled(enabled);
     #[cfg(target_os = "macos")]
     {
@@ -132,6 +131,47 @@ fn set_autostart_state(_app: tauri::AppHandle, enabled: bool) -> Result<(), Stri
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     { let _ = enabled; Ok(()) }
+}
+
+/// Clip the whole native window (webview + vibrancy backdrop) to a corner
+/// radius on macOS. A CSS radius on the page only rounds the web surface;
+/// the square frosted layer behind it still shows at the corners, so the
+/// window keeps looking square. Clipping the NSWindow content view's layer
+/// rounds every layer at once. No-op elsewhere (radius 0 restores square,
+/// used while maximized, like native windows).
+#[tauri::command]
+fn set_window_corner_radius(window: tauri::WebviewWindow, radius: f64) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        window
+            .with_webview(move |webview| {
+                use objc2::msg_send;
+                use objc2::runtime::AnyObject;
+                unsafe {
+                    let ns_window = webview.ns_window() as *mut AnyObject;
+                    if ns_window.is_null() {
+                        return;
+                    }
+                    let content_view: *mut AnyObject = msg_send![ns_window, contentView];
+                    if content_view.is_null() {
+                        return;
+                    }
+                    let _: () = msg_send![content_view, setWantsLayer: true];
+                    let layer: *mut AnyObject = msg_send![content_view, layer];
+                    if layer.is_null() {
+                        return;
+                    }
+                    let _: () = msg_send![layer, setCornerRadius: radius];
+                    let _: () = msg_send![layer, setMasksToBounds: true];
+                }
+            })
+            .map_err(|error| error.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (window, radius);
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -222,7 +262,8 @@ pub fn run() {
             read_md_file,
             write_md_file,
             get_autostart_state,
-            set_autostart_state
+            set_autostart_state,
+            set_window_corner_radius
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Fluent MD Todo");
