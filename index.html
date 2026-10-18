@@ -117,6 +117,14 @@
   body.pure-transparent .titlebar-actions {
     margin-right: 0;
   }
+  /* macOS: clip the surface to the native window corner radius (16pt on
+     current macOS) instead of painting square corners over it. */
+  body.is-mac.pure-transparent .fluent-window {
+    border-radius: 16px;
+  }
+  body.is-mac.pure-transparent.window-maximized .fluent-window {
+    border-radius: 0;
+  }
   body.pure-transparent .titlebar {
     -webkit-app-region: no-drag;
   }
@@ -1957,6 +1965,10 @@ if (window.__TAURI_INTERNALS__) {
   document.getElementById("btnMinimize").addEventListener("click", () => nativeWindow.minimize());
   document.getElementById("btnMaximize").addEventListener("click", () => nativeWindow.toggleMaximize());
   document.getElementById("btnCloseWindow").addEventListener("click", () => nativeWindow.close());
+  // Maximized windows are square on macOS too: drop the corner radius then.
+  nativeWindow.onResized?.(async () => {
+    document.body.classList.toggle("window-maximized", await nativeWindow.isMaximized());
+  });
   // macOS traffic lights (visible only on Mac) mirror the Windows controls.
   document.getElementById("btnMacClose").addEventListener("click", () => nativeWindow.close());
   document.getElementById("btnMacMinimize").addEventListener("click", () => nativeWindow.minimize());
