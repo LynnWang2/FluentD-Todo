@@ -632,6 +632,11 @@
     width: 36px;
   }
 
+  /* While squeezed, the sidebar toggle is locked (clicking does nothing) */
+  .fluent-window.auto-narrow .sidebar-toggle {
+    opacity: 0.45;
+  }
+
   .nav-section-title {
     font-size: 11px;
     font-weight: 600;
@@ -2105,6 +2110,9 @@ function setSidebarCollapsed(collapsed) {
   btnSidebarToggle.classList.toggle("active", !collapsed);
 }
 btnSidebarToggle.addEventListener("click", () => {
+  // In the squeezed (auto-narrow) layout there is no room for the sidebar:
+  // the toggle stays locked until the window is wide enough again.
+  if (appWindow.classList.contains("auto-narrow")) return;
   setSidebarCollapsed(!appWindow.classList.contains("sidebar-collapsed"));
 });
 
