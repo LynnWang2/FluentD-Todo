@@ -357,12 +357,17 @@
     border-color: rgba(0, 103, 192, 0.2);
   }
 
-  /* Autostart opts out of the blue accent: off = no frame at all,
-     on = just a white/gray frame (border-strong) with normal text color */
+  /* Autostart opts out of the blue accent: off = no frame at all (not even
+     on hover), on = just a white/gray frame (border-strong), normal colors */
   #btnAutoStart.active {
     background: transparent;
     color: var(--text-primary);
     border-color: var(--border-strong);
+  }
+
+  #btnAutoStart:not(.active),
+  #btnAutoStart:not(.active):hover {
+    border-color: transparent;
   }
 
   /* Opacity Popover Bar */
