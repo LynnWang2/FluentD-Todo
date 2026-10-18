@@ -2312,19 +2312,28 @@ btnSidebarToggle.addEventListener("click", () => {
   // In the squeezed (auto-narrow) layout there is no room for the sidebar:
   // the toggle stays locked until the window is wide enough again.
   if (appWindow.classList.contains("auto-narrow")) return;
+  sidebarAutoCollapsed = false; // a manual toggle overrides the auto memory
   setSidebarCollapsed(!appWindow.classList.contains("sidebar-collapsed"));
 });
 
 // Responsive squeeze: labels never wrap (CSS nowrap); when the window gets
 // narrower than the threshold, titlebar labels hide and the sidebar
-// auto-collapses. Widening brings the labels back, but the sidebar only
-// returns via the toggle button.
+// auto-collapses. Widening restores the labels — and the sidebar too, but
+// only when it was the narrowing that hid it (a manual collapse stays).
 const NARROW_THRESHOLD = 740;
 let wasNarrow = false;
+let sidebarAutoCollapsed = false;
 function applyResponsiveLayout() {
   const narrow = window.innerWidth < NARROW_THRESHOLD;
   appWindow.classList.toggle("auto-narrow", narrow);
-  if (narrow && !wasNarrow) setSidebarCollapsed(true);
+  if (narrow && !wasNarrow && !appWindow.classList.contains("sidebar-collapsed")) {
+    setSidebarCollapsed(true);
+    sidebarAutoCollapsed = true;
+  }
+  if (!narrow && wasNarrow && sidebarAutoCollapsed) {
+    setSidebarCollapsed(false);
+    sidebarAutoCollapsed = false;
+  }
   wasNarrow = narrow;
 }
 window.addEventListener("resize", applyResponsiveLayout);
