@@ -357,6 +357,14 @@
     border-color: rgba(0, 103, 192, 0.2);
   }
 
+  /* Autostart opts out of the blue accent: off = no frame at all,
+     on = just a white/gray frame (border-strong) with normal text color */
+  #btnAutoStart.active {
+    background: transparent;
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
   /* Opacity Popover Bar */
   .opacity-bar {
     display: flex;
@@ -1361,10 +1369,12 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         <span>源码</span>
       </button>
-      <button class="icon-btn" id="btnTheme" title="切换深色 / 浅色 Fluent 主题">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="themeIcon">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
+      <button class="icon-btn" id="btnTheme" title="切换浅色 / 深色模式">
+        <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg id="themeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+      </button>
+      <button class="icon-btn" id="btnThemeAuto" title="跟随系统颜色" aria-label="跟随系统颜色" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
       </button>
       <button class="icon-btn" id="btnAutoStart" title="开启开机自启动" aria-label="开机自启动" aria-pressed="false">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M5.5 5.5a9 9 0 1 0 13 0"/></svg>
@@ -2332,18 +2342,40 @@ function syncNativeWindowTheme() {
     .catch(error => console.error("Could not sync native window theme:", error));
 }
 
-// Theme Toggle
-document.getElementById("btnTheme").addEventListener("click", () => {
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  if (isDark) {
-    document.documentElement.removeAttribute("data-theme");
-    document.body.classList.remove("dark-backdrop");
-  } else {
+// Theme: one click on the sun/moon button flips light <-> dark (the icon
+// shows the active mode: sun = light, moon = dark). The half-circle button
+// is "follow system": the app then mirrors the OS appearance live.
+let themeMode = "system"; // 'system' | 'light' | 'dark'
+const themeMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : { matches: false };
+const btnThemeAuto = document.getElementById("btnThemeAuto");
+function effectiveDark() {
+  return themeMode === "system" ? !!themeMq.matches : themeMode === "dark";
+}
+function applyTheme() {
+  const dark = effectiveDark();
+  if (dark) {
     document.documentElement.setAttribute("data-theme", "dark");
     document.body.classList.add("dark-backdrop");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+    document.body.classList.remove("dark-backdrop");
   }
+  document.getElementById("themeIconMoon").style.display = dark ? "" : "none";
+  document.getElementById("themeIconSun").style.display = dark ? "none" : "";
+  btnThemeAuto.classList.toggle("active", themeMode === "system");
+  btnThemeAuto.setAttribute("aria-pressed", String(themeMode === "system"));
   syncNativeWindowTheme();
+}
+document.getElementById("btnTheme").addEventListener("click", () => {
+  themeMode = effectiveDark() ? "light" : "dark";
+  applyTheme();
 });
+btnThemeAuto.addEventListener("click", () => {
+  themeMode = "system";
+  applyTheme();
+});
+if (themeMq.addEventListener) themeMq.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
+else if (themeMq.addListener) themeMq.addListener(() => { if (themeMode === "system") applyTheme(); });
 
 // Raw Markdown Modal
 const rawModal = document.getElementById("rawModal");
@@ -2385,11 +2417,7 @@ document.getElementById("btnDownloadMd").addEventListener("click", async () => {
 if (window.__TAURI_INTERNALS__) {
   document.body.classList.add("pure-transparent");
 }
-if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-  document.documentElement.setAttribute("data-theme", "dark");
-  document.body.classList.add("dark-backdrop");
-}
-syncNativeWindowTheme();
+applyTheme();
 
 // Read the last selected document through Rust: Tauri's file-dialog scope is temporary
 // and does not grant the previous file path again after an app restart.
