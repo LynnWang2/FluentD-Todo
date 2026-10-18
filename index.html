@@ -2091,6 +2091,11 @@ function closeViewSwitch() {
 function buildViewSwitchPanel() {
   const { tasks, sections } = parseMarkdown(rawContent);
   viewSwitchPanel.innerHTML = "";
+  const allItem = document.createElement("div");
+  allItem.className = `view-switch-item ${currentFilter === "all" ? "active" : ""}`;
+  allItem.innerHTML = `<span>全部待办</span><span class="nav-count">${tasks.length}</span>`;
+  allItem.addEventListener("click", () => { closeViewSwitch(); setFilter("all"); });
+  viewSwitchPanel.appendChild(allItem);
   const addItem = (name, count) => {
     const item = document.createElement("div");
     item.className = `view-switch-item ${currentFilter === `section:${name}` ? "active" : ""}`;
