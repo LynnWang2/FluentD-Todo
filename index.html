@@ -1298,7 +1298,7 @@
           <input type="text" class="add-input" id="newTaskInput" placeholder="添加新待办" />
         </div>
         <select class="section-select" id="sectionSelect" title="选择插入到哪个 Markdown 标题章节下">
-          <option value="__end__">追加到文档末尾</option>
+          <option value="__uncategorized__">未分类</option>
         </select>
       </div>
     </main>
@@ -1565,15 +1565,17 @@ function addNewTask() {
   const { lines, sections, tasks } = parseMarkdown(rawContent);
   const newTaskLine = `- [ ] ${text}`;
 
-  if (targetSection === "__end__" || sections.length === 0) {
-    // Append cleanly at end
-    if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
-      lines.push(newTaskLine);
-    } else if (lines.length > 0 && lines[lines.length - 1].trim() === "") {
-      lines[lines.length - 1] = newTaskLine;
-      lines.push("");
+  if (targetSection === "__uncategorized__") {
+    // Uncategorized = the tasks before the first heading: insert right after
+    // the last of them; if there are none yet, insert just before the first
+    // heading (or at the top of an empty / heading-less document).
+    const uncatTasks = tasks.filter(t => t.section === "未分类");
+    if (uncatTasks.length > 0) {
+      lines.splice(uncatTasks[uncatTasks.length - 1].lineIndex + 1, 0, newTaskLine);
+    } else if (sections.length > 0) {
+      lines.splice(sections[0].lineIndex, 0, newTaskLine);
     } else {
-      lines.push(newTaskLine);
+      lines.splice(0, 0, newTaskLine);
     }
   } else {
     // Find last task in that section, or insert right after the section heading
@@ -1614,7 +1616,7 @@ function renderApp() {
   // Render Sidebar Sections
   sectionNavList.innerHTML = "";
   const prevSelectedSec = sectionSelect.value;
-  sectionSelect.innerHTML = `<option value="__end__">追加到文档末尾</option>`;
+  sectionSelect.innerHTML = `<option value="__uncategorized__">未分类</option>`;
 
   sections.forEach(sec => {
     const secCount = tasks.filter(t => t.section === sec.name).length;
@@ -1805,7 +1807,7 @@ function setFilter(filterKey, customLabel) {
   renderApp();
 
   // Quick-add target follows the current view: entering a section points the
-  // bottom-right selector at that section; other views reset it to append-at-end.
+  // bottom-right selector at that section; other views reset it to 未分类.
   // (A later manual change of the selector is preserved by renderApp as before.)
   if (filterKey.startsWith("section:")) {
     const targetSec = filterKey.slice(8);
@@ -1813,7 +1815,7 @@ function setFilter(filterKey, customLabel) {
       sectionSelect.value = targetSec;
     }
   } else {
-    sectionSelect.value = "__end__";
+    sectionSelect.value = "__uncategorized__";
   }
 }
 
