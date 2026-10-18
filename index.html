@@ -170,11 +170,6 @@
     transition: background-color 0.18s ease, max-width 0.28s cubic-bezier(0.16, 1, 0.3, 1), height 0.28s ease;
   }
 
-  .fluent-window.compact-mode {
-    max-width: 380px;
-    height: min(82vh, 640px);
-  }
-
   /* Titlebar / Top Header */
   .titlebar {
     height: 46px;
@@ -193,6 +188,8 @@
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.1px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .brand-icon {
@@ -338,6 +335,10 @@
     justify-content: center;
     gap: 5px;
     font-size: 12px;
+    /* Button labels stay on one line; when space runs out the responsive
+       narrow layout hides them instead of wrapping */
+    white-space: nowrap;
+    flex-shrink: 0;
     font-family: inherit;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -419,12 +420,36 @@
 
   .file-info {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
     gap: 8px;
     min-width: 0;
     flex: 1;
     position: relative;
+  }
+
+  /* Sidebar show/hide toggle: sits left of the file pill (which shifts right
+     for it) and carries the pill's chrome. */
+  .sidebar-toggle {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    flex-shrink: 0;
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-card);
+    color: var(--text-muted);
+  }
+
+  .sidebar-toggle:hover {
+    background: rgba(var(--card-hover-rgb), 0.95);
+    color: var(--text-primary);
+  }
+
+  .sidebar-toggle.active {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
   }
 
   /* Anchor for the dropdown: shrink-wraps to the file pill's width */
@@ -589,17 +614,18 @@
     flex-shrink: 0;
   }
 
-  .fluent-window.compact-mode .sidebar {
+  /* Sidebar collapsed (toggle button, or auto-collapse in a narrow window) */
+  .fluent-window.sidebar-collapsed .sidebar {
     display: none;
   }
 
-  /* Compact mode: titlebar actions become icon-only and the opacity slider shrinks */
-  .fluent-window.compact-mode .titlebar-actions .icon-btn span,
-  .fluent-window.compact-mode .opacity-bar > span {
+  /* Narrow window: titlebar actions become icon-only, opacity slider shrinks */
+  .fluent-window.auto-narrow .titlebar-actions .icon-btn span,
+  .fluent-window.auto-narrow .opacity-bar > span {
     display: none;
   }
 
-  .fluent-window.compact-mode .opacity-slider {
+  .fluent-window.auto-narrow .opacity-slider {
     width: 36px;
   }
 
@@ -775,7 +801,7 @@
     overflow-x: auto;
   }
 
-  .fluent-window.compact-mode .compact-filters {
+  .fluent-window.sidebar-collapsed .compact-filters {
     display: flex;
   }
 
@@ -1187,10 +1213,6 @@
         <span>不透明度</span>
         <input type="range" id="opacitySlider" class="opacity-slider" min="35" max="98" value="76" />
       </div>
-      <button class="icon-btn" id="btnCompact" title="切换紧凑悬浮窗布局">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
-        <span>紧凑</span>
-      </button>
       <button class="icon-btn" id="btnRawMd" title="查看或编辑底层 Markdown 源码">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         <span>源码</span>
@@ -1221,6 +1243,9 @@
   <!-- File Selection & Sync Toolbar -->
   <section class="file-toolbar">
     <div class="file-info">
+      <button class="icon-btn sidebar-toggle active" id="btnSidebarToggle" title="展开 / 收起侧边栏" aria-label="展开或收起侧边栏" aria-pressed="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+      </button>
       <div class="file-menu">
       <div class="file-pill" id="currentFileName" title="点击展开 / 收起文件操作（选择或新建 .md）">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2039,28 +2064,32 @@ if (window.__TAURI_INTERNALS__) {
   }
 }
 
-// Compact Mode Toggle: also shrinks the native window (the old CSS max-width
-// alone could not get past the window's own size / min-width).
-let sizeBeforeCompact = null;
-document.getElementById("btnCompact").addEventListener("click", async e => {
-  const isCompact = appWindow.classList.toggle("compact-mode");
-  e.currentTarget.classList.toggle("active", isCompact);
-  if (!window.__TAURI_INTERNALS__) return;
-  try {
-    const nativeWin = getCurrentWindow();
-    const factor = await nativeWin.scaleFactor();
-    if (isCompact) {
-      const physical = await nativeWin.innerSize();
-      sizeBeforeCompact = physical.toLogical(factor);
-      await nativeWin.setSize(new LogicalSize(380, sizeBeforeCompact.height));
-    } else if (sizeBeforeCompact) {
-      await nativeWin.setSize(new LogicalSize(sizeBeforeCompact.width, sizeBeforeCompact.height));
-      sizeBeforeCompact = null;
-    }
-  } catch (error) {
-    console.error("Could not resize window for compact mode:", error);
-  }
+// Sidebar toggle: a button with the old compact button's icon, sitting left of
+// the file name pill (the pill shifts right for it). Shows/hides the sidebar.
+const btnSidebarToggle = document.getElementById("btnSidebarToggle");
+function setSidebarCollapsed(collapsed) {
+  appWindow.classList.toggle("sidebar-collapsed", collapsed);
+  btnSidebarToggle.setAttribute("aria-pressed", String(!collapsed));
+  btnSidebarToggle.classList.toggle("active", !collapsed);
+}
+btnSidebarToggle.addEventListener("click", () => {
+  setSidebarCollapsed(!appWindow.classList.contains("sidebar-collapsed"));
 });
+
+// Responsive squeeze: labels never wrap (CSS nowrap); when the window gets
+// narrower than the threshold, titlebar labels hide and the sidebar
+// auto-collapses. Widening brings the labels back, but the sidebar only
+// returns via the toggle button.
+const NARROW_THRESHOLD = 740;
+let wasNarrow = false;
+function applyResponsiveLayout() {
+  const narrow = window.innerWidth < NARROW_THRESHOLD;
+  appWindow.classList.toggle("auto-narrow", narrow);
+  if (narrow && !wasNarrow) setSidebarCollapsed(true);
+  wasNarrow = narrow;
+}
+window.addEventListener("resize", applyResponsiveLayout);
+applyResponsiveLayout();
 
 // Keep the native window appearance in sync with the in-app theme: the macOS
 // vibrancy backdrop (Effect::Sidebar) follows the window appearance, not the
