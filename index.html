@@ -1895,8 +1895,17 @@ function renderApp() {
     return;
   }
 
+  // Completed tasks sink to the end of their section; order inside each
+  // group (active / completed) stays in document order (stable sort), and
+  // sections keep their document order.
+  const sectionOrder = new Map();
+  filteredTasks.forEach(t => { if (!sectionOrder.has(t.section)) sectionOrder.set(t.section, sectionOrder.size); });
+  const displayTasks = filteredTasks.slice().sort((a, b) =>
+    (sectionOrder.get(a.section) - sectionOrder.get(b.section)) ||
+    ((a.completed ? 1 : 0) - (b.completed ? 1 : 0)));
+
   let lastRenderedSection = null;
-  filteredTasks.forEach(task => {
+  displayTasks.forEach(task => {
     if (task.section !== lastRenderedSection && !currentFilter.startsWith("section:")) {
       lastRenderedSection = task.section;
       const headerEl = document.createElement("div");
