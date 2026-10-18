@@ -1369,12 +1369,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         <span>源码</span>
       </button>
-      <button class="icon-btn" id="btnTheme" title="切换浅色 / 深色模式">
-        <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <button class="icon-btn" id="btnTheme" title="主题：跟随系统（点击切换）">
+        <svg id="themeIconAuto" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
+        <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg id="themeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-      </button>
-      <button class="icon-btn" id="btnThemeAuto" title="跟随系统颜色" aria-label="跟随系统颜色" aria-pressed="true">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
       </button>
       <button class="icon-btn" id="btnAutoStart" title="开启开机自启动" aria-label="开机自启动" aria-pressed="false">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M5.5 5.5a9 9 0 1 0 13 0"/></svg>
@@ -2342,12 +2340,14 @@ function syncNativeWindowTheme() {
     .catch(error => console.error("Could not sync native window theme:", error));
 }
 
-// Theme: one click on the sun/moon button flips light <-> dark (the icon
-// shows the active mode: sun = light, moon = dark). The half-circle button
-// is "follow system": the app then mirrors the OS appearance live.
+// Theme: ONE button, three states rotating on each click —
+// follow system -> light -> dark -> follow system ... The icon rotates with
+// the state (half circle = system, sun = light, moon = dark).
 let themeMode = "system"; // 'system' | 'light' | 'dark'
+const THEME_CYCLE = ["system", "light", "dark"];
+const THEME_LABELS = { system: "跟随系统", light: "浅色", dark: "深色" };
 const themeMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : { matches: false };
-const btnThemeAuto = document.getElementById("btnThemeAuto");
+const btnTheme = document.getElementById("btnTheme");
 function effectiveDark() {
   return themeMode === "system" ? !!themeMq.matches : themeMode === "dark";
 }
@@ -2360,18 +2360,14 @@ function applyTheme() {
     document.documentElement.removeAttribute("data-theme");
     document.body.classList.remove("dark-backdrop");
   }
-  document.getElementById("themeIconMoon").style.display = dark ? "" : "none";
-  document.getElementById("themeIconSun").style.display = dark ? "none" : "";
-  btnThemeAuto.classList.toggle("active", themeMode === "system");
-  btnThemeAuto.setAttribute("aria-pressed", String(themeMode === "system"));
+  document.getElementById("themeIconAuto").style.display = themeMode === "system" ? "" : "none";
+  document.getElementById("themeIconSun").style.display = themeMode === "light" ? "" : "none";
+  document.getElementById("themeIconMoon").style.display = themeMode === "dark" ? "" : "none";
+  btnTheme.title = `主题：${THEME_LABELS[themeMode]}（点击切换）`;
   syncNativeWindowTheme();
 }
-document.getElementById("btnTheme").addEventListener("click", () => {
-  themeMode = effectiveDark() ? "light" : "dark";
-  applyTheme();
-});
-btnThemeAuto.addEventListener("click", () => {
-  themeMode = "system";
+btnTheme.addEventListener("click", () => {
+  themeMode = THEME_CYCLE[(THEME_CYCLE.indexOf(themeMode) + 1) % THEME_CYCLE.length];
   applyTheme();
 });
 if (themeMq.addEventListener) themeMq.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
