@@ -205,8 +205,9 @@
   }
 
   /* Sync status is just a dot (details stay in the tooltip) */
+  /* Sync dot removed from the titlebar (kept in the DOM: JS still updates it) */
   .sync-badge {
-    display: inline-flex;
+    display: none;
     align-items: center;
     padding: 2px;
     background: transparent;
