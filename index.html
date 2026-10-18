@@ -1190,8 +1190,14 @@
   .add-plus-icon {
     position: absolute;
     left: 11px;
-    color: var(--accent);
+    color: var(--text-muted);
     pointer-events: none;
+  }
+
+  /* The placeholder takes the same muted color, so the + and the text next
+     to it match exactly in both themes */
+  .add-input::placeholder {
+    color: var(--text-muted);
   }
 
   .section-select {
