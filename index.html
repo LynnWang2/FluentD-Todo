@@ -2031,6 +2031,16 @@ document.getElementById("btnCompact").addEventListener("click", async e => {
   }
 });
 
+// Keep the native window appearance in sync with the in-app theme: the macOS
+// vibrancy backdrop (Effect::Sidebar) follows the window appearance, not the
+// page theme — without this it stays light and washes dark mode gray.
+function syncNativeWindowTheme() {
+  if (!window.__TAURI_INTERNALS__) return;
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  getCurrentWindow().setTheme(dark ? "dark" : "light")
+    .catch(error => console.error("Could not sync native window theme:", error));
+}
+
 // Theme Toggle
 document.getElementById("btnTheme").addEventListener("click", () => {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -2041,6 +2051,7 @@ document.getElementById("btnTheme").addEventListener("click", () => {
     document.documentElement.setAttribute("data-theme", "dark");
     document.body.classList.add("dark-backdrop");
   }
+  syncNativeWindowTheme();
 });
 
 // Raw Markdown Modal
@@ -2087,6 +2098,7 @@ if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").match
   document.documentElement.setAttribute("data-theme", "dark");
   document.body.classList.add("dark-backdrop");
 }
+syncNativeWindowTheme();
 
 // Read the last selected document through Rust: Tauri's file-dialog scope is temporary
 // and does not grant the previous file path again after an app restart.
