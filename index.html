@@ -727,6 +727,15 @@
     background: rgba(var(--card-rgb), 0.95);
   }
 
+  /* Hint text stays hidden until the box is focused (and typing hides it anyway) */
+  .search-input::placeholder {
+    color: transparent;
+  }
+
+  .search-input:focus::placeholder {
+    color: var(--text-muted);
+  }
+
   .search-icon {
     position: absolute;
     left: 9px;
@@ -1152,8 +1161,8 @@
     </div>
 
     <div class="titlebar-actions">
-      <div class="opacity-bar" title="调节 Fluent 亚克力/云母半透明度">
-        <span>半透明</span>
+      <div class="opacity-bar" title="调节窗口不透明度">
+        <span>不透明度</span>
         <input type="range" id="opacitySlider" class="opacity-slider" min="35" max="98" value="76" />
       </div>
       <button class="icon-btn" id="btnCompact" title="切换紧凑悬浮窗布局">
@@ -1250,7 +1259,7 @@
         <span class="nav-count" id="countCompleted">0</span>
       </div>
 
-      <div class="nav-section-title" style="margin-top:8px;">文档章节 (# 标题)</div>
+      <div class="nav-section-title" style="margin-top:8px;">文档章节</div>
       <div id="sectionNavList" style="display:flex;flex-direction:column;gap:3px;"></div>
     </aside>
 
