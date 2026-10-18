@@ -447,9 +447,12 @@
     color: var(--text-primary);
   }
 
+  /* On state matches the file pill next to it exactly (no accent tint) */
   .sidebar-toggle.active {
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    border-color: var(--border-subtle);
     color: var(--text-primary);
-    border-color: var(--border-strong);
+    box-shadow: var(--shadow-card);
   }
 
   /* Anchor for the dropdown: shrink-wraps to the file pill's width */
