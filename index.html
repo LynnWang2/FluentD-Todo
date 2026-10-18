@@ -2101,6 +2101,16 @@ function buildViewSwitchPanel() {
   allItem.innerHTML = `<span>全部待办</span><span class="nav-count">${tasks.length}</span>`;
   allItem.addEventListener("click", () => { closeViewSwitch(); setFilter("all"); });
   viewSwitchPanel.appendChild(allItem);
+  const activeCount = tasks.filter(t => !t.completed).length;
+  const addView = (label, key, count) => {
+    const item = document.createElement("div");
+    item.className = `view-switch-item ${currentFilter === key ? "active" : ""}`;
+    item.innerHTML = `<span>${label}</span><span class="nav-count">${count}</span>`;
+    item.addEventListener("click", () => { closeViewSwitch(); setFilter(key); });
+    viewSwitchPanel.appendChild(item);
+  };
+  addView("进行中", "active", activeCount);
+  addView("已完成", "completed", tasks.length - activeCount);
   const addItem = (name, count) => {
     const item = document.createElement("div");
     item.className = `view-switch-item ${currentFilter === `section:${name}` ? "active" : ""}`;
