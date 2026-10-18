@@ -850,11 +850,16 @@
     gap: 10px;
     font-size: 12px;
     color: var(--text-secondary);
+    /* Fixed height: hiding the count text (narrow window) must not collapse
+       the row and shift the progress line */
+    height: 18px;
+    flex-shrink: 0;
   }
 
   .progress-track {
     width: 120px;
     height: 5px;
+    flex-shrink: 0;
     border-radius: 999px;
     background: var(--border-strong);
     overflow: hidden;
