@@ -732,6 +732,87 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    position: relative;
+  }
+
+  /* Section switcher: chevron after the view title, only while the sidebar is
+     collapsed; drops a list of 未分类 (when it has tasks) + all sections. */
+  .view-switch-btn {
+    display: none;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  .view-switch-btn:hover {
+    background: rgba(var(--card-rgb), 0.65);
+    color: var(--text-primary);
+  }
+
+  .fluent-window.sidebar-collapsed .view-switch-btn {
+    display: inline-flex;
+  }
+
+  .view-switch-btn svg {
+    transition: transform 0.15s ease;
+  }
+
+  .view-switch-btn.open svg {
+    transform: rotate(180deg);
+  }
+
+  .view-switch-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 40;
+    min-width: 180px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px;
+    border-radius: 10px;
+    background: rgba(var(--surface-rgb), 0.97);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-window);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .view-switch-panel.open {
+    display: flex;
+  }
+
+  .view-switch-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    height: 30px;
+    padding: 0 9px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .view-switch-item:hover {
+    background: rgba(var(--card-rgb), 0.65);
+    color: var(--text-primary);
+  }
+
+  .view-switch-item.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
   }
 
   .progress-row {
@@ -1338,6 +1419,10 @@
         <div class="pane-title-wrap">
           <div class="pane-title">
             <span id="currentViewTitle">全部待办</span>
+            <button class="view-switch-btn" id="btnViewSwitch" title="切换章节" aria-label="切换章节">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="view-switch-panel" id="viewSwitchPanel"></div>
           </div>
           <div class="progress-row">
             <div class="progress-track">
@@ -1709,20 +1794,27 @@ function renderApp() {
   const prevSelectedSec = sectionSelect.value;
   sectionSelect.innerHTML = `<option value="__uncategorized__">未分类</option>`;
 
-  sections.forEach(sec => {
-    const secCount = tasks.filter(t => t.section === sec.name).length;
+  function addSectionNav(name, count) {
     const navEl = document.createElement("div");
-    const filterKey = `section:${sec.name}`;
+    const filterKey = `section:${name}`;
     navEl.className = `nav-item ${currentFilter === filterKey ? "active" : ""}`;
     navEl.innerHTML = `
       <div class="nav-label">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3L8 21"/><path d="M16 3l-2 18"/></svg>
-        <span>${escapeHtml(sec.name)}</span>
+        <span>${escapeHtml(name)}</span>
       </div>
-      <span class="nav-count">${secCount}</span>
+      <span class="nav-count">${count}</span>
     `;
-    navEl.addEventListener("click", () => setFilter(filterKey, sec.name));
+    navEl.addEventListener("click", () => setFilter(filterKey, name));
     sectionNavList.appendChild(navEl);
+  }
+
+  // Tasks before the first heading are uncategorized: list them too, first.
+  const uncatCount = tasks.filter(t => t.section === "未分类").length;
+  if (uncatCount > 0) addSectionNav("未分类", uncatCount);
+
+  sections.forEach(sec => {
+    addSectionNav(sec.name, tasks.filter(t => t.section === sec.name).length);
 
     const opt = document.createElement("option");
     opt.value = sec.name;
@@ -1905,7 +1997,9 @@ function setFilter(filterKey, customLabel) {
   // (A later manual change of the selector is preserved by renderApp as before.)
   if (filterKey.startsWith("section:")) {
     const targetSec = filterKey.slice(8);
-    if ([...sectionSelect.options].some(o => o.value === targetSec)) {
+    if (targetSec === "未分类") {
+      sectionSelect.value = "__uncategorized__";
+    } else if ([...sectionSelect.options].some(o => o.value === targetSec)) {
       sectionSelect.value = targetSec;
     }
   } else {
@@ -1925,6 +2019,41 @@ const fileActionsPanel = document.getElementById("fileActionsPanel");
 filePill.addEventListener("click", () => {
   fileActionsPanel.classList.toggle("open");
   filePill.classList.toggle("open");
+});
+
+// Section switcher (chevron next to the view title, visible while the sidebar
+// is collapsed): drops a list of 未分类 (when it has tasks) + all sections.
+const btnViewSwitch = document.getElementById("btnViewSwitch");
+const viewSwitchPanel = document.getElementById("viewSwitchPanel");
+function closeViewSwitch() {
+  viewSwitchPanel.classList.remove("open");
+  btnViewSwitch.classList.remove("open");
+}
+function buildViewSwitchPanel() {
+  const { tasks, sections } = parseMarkdown(rawContent);
+  viewSwitchPanel.innerHTML = "";
+  const addItem = (name, count) => {
+    const item = document.createElement("div");
+    item.className = `view-switch-item ${currentFilter === `section:${name}` ? "active" : ""}`;
+    item.innerHTML = `<span>${name === "未分类" ? "未分类" : `# ${escapeHtml(name)}`}</span><span class="nav-count">${count}</span>`;
+    item.addEventListener("click", () => { closeViewSwitch(); setFilter(`section:${name}`, name); });
+    viewSwitchPanel.appendChild(item);
+  };
+  const uncatCount = tasks.filter(t => t.section === "未分类").length;
+  if (uncatCount > 0) addItem("未分类", uncatCount);
+  sections.forEach(sec => addItem(sec.name, tasks.filter(t => t.section === sec.name).length));
+}
+btnViewSwitch.addEventListener("click", e => {
+  e.stopPropagation();
+  if (viewSwitchPanel.classList.contains("open")) { closeViewSwitch(); return; }
+  buildViewSwitchPanel();
+  viewSwitchPanel.classList.add("open");
+  btnViewSwitch.classList.add("open");
+});
+document.addEventListener("click", e => {
+  if (!viewSwitchPanel.classList.contains("open")) return;
+  if (e.target.closest(".pane-title")) return;
+  closeViewSwitch();
 });
 ["btnOpenFile", "btnCreateFile"].forEach(id => {
   document.getElementById(id).addEventListener("click", () => {
