@@ -1833,13 +1833,21 @@ function renderApp() {
   const totalCount = tasks.length;
   const completedCount = tasks.filter(t => t.completed).length;
   const activeCount = totalCount - completedCount;
-  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   countAll.textContent = totalCount;
   countActive.textContent = activeCount;
   countCompleted.textContent = completedCount;
+
+  // The progress bar under the view title reflects the CURRENT view's own
+  // tasks, not the whole file (in 未分类 it shows that group's done/total).
+  const viewTasks = currentFilter === "all" ? tasks
+    : currentFilter === "active" ? tasks.filter(t => !t.completed)
+    : currentFilter === "completed" ? tasks.filter(t => t.completed)
+    : tasks.filter(t => t.section === currentFilter.slice(8));
+  const viewDone = viewTasks.filter(t => t.completed).length;
+  const pct = viewTasks.length > 0 ? Math.round((viewDone / viewTasks.length) * 100) : 0;
   progressBar.style.width = `${pct}%`;
-  progressText.textContent = `${completedCount} / ${totalCount}`;
+  progressText.textContent = `${viewDone} / ${viewTasks.length}`;
   const completedButton = document.getElementById("btnClearCompleted");
   completedButton.querySelector("span").textContent = hideCompletedTasks ? "显示已完成" : "隐藏已完成";
   completedButton.title = hideCompletedTasks ? "仅在应用中显示已完成的待办" : "仅在应用中隐藏已完成的待办";
