@@ -410,10 +410,16 @@
     position: relative;
   }
 
+  /* Anchor for the dropdown: shrink-wraps to the file pill's width */
+  .file-menu {
+    position: relative;
+  }
+
   .file-pill {
     display: inline-flex;
     align-items: center;
     gap: 7px;
+    height: 32px;
     padding: 5px 11px;
     border-radius: var(--radius-control);
     background: rgba(var(--card-rgb), var(--card-alpha));
@@ -444,45 +450,44 @@
   }
 
   /* File actions (open / create .md) drop down as an overlay under the file
-     name pill, covering the window below instead of pushing content down. */
+     name pill, covering the window below instead of pushing content down.
+     The panel is a bare container exactly as wide as the pill; each row
+     carries the pill's own style so all three buttons match. */
   .file-actions-panel {
     display: none;
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
+    width: 100%;
     z-index: 40;
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
-    min-width: 196px;
-    padding: 6px;
-    border-radius: 10px;
-    background: rgba(var(--surface-rgb), 0.97);
-    border: 1px solid var(--border-strong);
-    box-shadow: var(--shadow-window);
+    gap: 6px;
   }
 
   .file-actions-panel.open {
     display: flex;
   }
 
-  /* Both dropdown rows share one aligned style: same height/padding, icons in
-     the same slot, no extra inner frame around the plain row. */
+  /* Same style, width and height as the file pill above */
   .file-actions-panel .fluent-btn {
     justify-content: flex-start;
-    height: 36px;
-    padding: 0 10px;
-    border-color: transparent;
-    box-shadow: none;
+    height: 32px;
+    padding: 0 11px;
+    gap: 7px;
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-control);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    box-shadow: var(--shadow-card);
   }
 
-  .file-actions-panel .fluent-btn:not(.primary) {
-    background: transparent;
-  }
-
-  .file-actions-panel .fluent-btn:not(.primary):hover {
-    background: rgba(var(--card-rgb), 0.65);
-    border-color: transparent;
+  .file-actions-panel .fluent-btn:hover {
+    background: rgba(var(--card-hover-rgb), 0.95);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
   }
 
   .file-actions-panel .fluent-btn svg {
@@ -1199,6 +1204,7 @@
   <!-- File Selection & Sync Toolbar -->
   <section class="file-toolbar">
     <div class="file-info">
+      <div class="file-menu">
       <div class="file-pill" id="currentFileName" title="点击展开 / 收起文件操作（选择或新建 .md）">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1208,7 +1214,7 @@
         <svg class="file-pill-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </div>
       <div class="file-actions-panel" id="fileActionsPanel">
-        <button class="fluent-btn primary" id="btnOpenFile">
+        <button class="fluent-btn" id="btnOpenFile">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
@@ -1222,7 +1228,7 @@
           <span>新建 .md</span>
         </button>
       </div>
-
+      </div>
     </div>
 
     <div class="btn-group">
