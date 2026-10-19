@@ -33,6 +33,7 @@
     --slider-filled: #5a5e66;
     --slider-rest: rgba(0, 0, 0, 0.20);
     --slider-thumb: #5a5e66;
+    --danger: #c42b1c;
     --shadow-window: 0 20px 50px rgba(0, 0, 0, 0.16), 0 4px 14px rgba(0, 0, 0, 0.06);
     --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.03);
     --radius-window: 12px;
@@ -61,6 +62,7 @@
     --slider-filled: #ffffff;
     --slider-rest: rgba(255, 255, 255, 0.30);
     --slider-thumb: #ffffff;
+    --danger: #ff7b72;
     --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.48), 0 4px 16px rgba(0, 0, 0, 0.28);
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.18);
   }
@@ -1374,6 +1376,111 @@
     outline: none;
   }
 
+  /* Section heading row with its + (new section) button */
+  .nav-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+
+  .mini-add-btn {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.13s ease;
+  }
+
+  .mini-add-btn:hover {
+    background: rgba(var(--card-rgb), 0.85);
+    color: var(--text-primary);
+  }
+
+  .mini-add-btn:active {
+    transform: scale(0.92);
+  }
+
+  /* Custom right-click menu */
+  .context-menu {
+    position: fixed;
+    z-index: 300;
+    min-width: 172px;
+    padding: 5px;
+    border-radius: 10px;
+    background: rgba(var(--surface-rgb), 0.96);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-window);
+    display: none;
+  }
+
+  .context-menu.open {
+    display: block;
+    animation: popIn 0.15s var(--ease-out);
+    transform-origin: top left;
+  }
+
+  .context-menu-item {
+    padding: 7px 10px;
+    border-radius: var(--radius-control);
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .context-menu-item:hover {
+    background: rgba(var(--card-rgb), 0.85);
+  }
+
+  .context-menu-item.danger {
+    color: var(--danger, #c42b1c);
+  }
+
+  /* Generic small dialog */
+  .app-modal-card {
+    max-width: 380px;
+  }
+
+  .app-modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+  }
+
+  .app-modal-input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border-subtle);
+    background: rgba(var(--card-rgb), 0.85);
+    color: var(--text-primary);
+    font-size: 13.5px;
+    font-family: inherit;
+    outline: none;
+  }
+
+  .app-modal-select {
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .app-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
   /* ============ Motion ============
      Fluent-style micro-animations: only opacity/transform animate, 150-320ms,
      one decelerating curve everywhere. */
@@ -1648,7 +1755,12 @@
         <span class="nav-count" id="countCompleted">0</span>
       </div>
 
-      <div class="nav-section-title" style="margin-top:8px;">待办分类</div>
+      <div class="nav-section-head">
+        <div class="nav-section-title">待办分类</div>
+        <button class="mini-add-btn" id="btnAddSection" title="新建分类" aria-label="新建分类">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
       <div id="sectionNavList" style="display:flex;flex-direction:column;gap:3px;"></div>
     </aside>
 
@@ -1718,6 +1830,22 @@
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button class="fluent-btn" id="btnDownloadMd">导出 .md 副本</button>
       <button class="fluent-btn primary" id="btnSaveRawMd">应用并同步到文件</button>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu (custom, replaces the webview's right-click menu) -->
+<div id="contextMenu" class="context-menu"></div>
+
+<!-- Generic small dialog: new section / new task / move task -->
+<div class="modal-backdrop" id="appModal">
+  <div class="modal-card app-modal-card">
+    <div class="app-modal-title" id="appModalTitle"></div>
+    <input type="text" id="appModalInput" class="app-modal-input" />
+    <select id="appModalSelect" class="section-select app-modal-select"></select>
+    <div class="app-modal-actions">
+      <button class="fluent-btn" id="appModalCancel">取消</button>
+      <button class="fluent-btn primary" id="appModalOk">确定</button>
     </div>
   </div>
 </div>
@@ -2027,11 +2155,15 @@ function toggleTaskPriority(lineIndex) {
   saveToMarkdownFile(lines.join("\n"), "优先级已切换");
 }
 
-function undoDelete(lineIndex, text) {
+function restoreLine(lineIndex, text) {
   if (typeof text !== "string") return;
   const { lines } = parseMarkdown(rawContent);
   lines.splice(Math.min(lineIndex, lines.length), 0, text);
-  saveToMarkdownFile(lines.join("\n"), "已撤销删除");
+  saveToMarkdownFile(lines.join("\n"), "已撤销");
+}
+
+function undoDelete(lineIndex, text) {
+  restoreLine(lineIndex, text);
   showToast("已恢复删除的待办");
 }
 
@@ -2054,46 +2186,51 @@ function deleteTask(lineIndex) {
   setTimeout(() => flipCards(doDelete), 200);
 }
 
+// Where a new line lands for a target section: after the section's last
+// task, right after its heading when empty; for 未分类 after the last
+// uncategorized task / before the first heading / at the very top.
+function insertionIndexFor(parsed, targetSection) {
+  const { lines, sections, tasks } = parsed;
+  if (targetSection === "__uncategorized__" || targetSection === "未分类") {
+    const uncatTasks = tasks.filter(t => t.section === "未分类");
+    if (uncatTasks.length > 0) return uncatTasks[uncatTasks.length - 1].lineIndex + 1;
+    if (sections.length > 0) return sections[0].lineIndex;
+    return 0;
+  }
+  const secTasks = tasks.filter(t => t.section === targetSection);
+  if (secTasks.length > 0) return secTasks[secTasks.length - 1].lineIndex + 1;
+  const secObj = sections.find(s => s.name === targetSection);
+  return secObj ? secObj.lineIndex + 1 : lines.length;
+}
+
+function insertTaskLine(newTaskLine, targetSection) {
+  const parsed = parseMarkdown(rawContent);
+  const idx = insertionIndexFor(parsed, targetSection);
+  newCardLineIndex = idx;
+  parsed.lines.splice(idx, 0, newTaskLine);
+  saveToMarkdownFile(parsed.lines.join("\n"), "已新增待办");
+}
+
+function moveTaskLine(lineIndex, targetSection) {
+  const parsed = parseMarkdown(rawContent);
+  const task = parsed.tasks.find(t => t.lineIndex === lineIndex);
+  const text = parsed.lines[lineIndex];
+  if (!task || typeof text !== "string") return;
+  const targetName = targetSection === "__uncategorized__" ? "未分类" : targetSection;
+  if (task.section === targetName) { showToast("这条待办已在该分类中"); return; }
+  parsed.lines.splice(lineIndex, 1);
+  const idx = insertionIndexFor(parseMarkdown(parsed.lines.join("\n")), targetSection);
+  newCardLineIndex = idx;
+  parsed.lines.splice(idx, 0, text);
+  saveToMarkdownFile(parsed.lines.join("\n"), "已移动待办");
+  showToast(targetName === "未分类" ? "已移动到未分类" : `已移动到 # ${targetName}`);
+}
+
 function addNewTask() {
   const text = newTaskInput.value.trim();
   if (!text) return;
-
-  const targetSection = sectionSelect.value;
-  const { lines, sections, tasks } = parseMarkdown(rawContent);
-  const newTaskLine = `- [ ] ${text}`;
-
-  if (targetSection === "__uncategorized__") {
-    // Uncategorized = the tasks before the first heading: insert right after
-    // the last of them; if there are none yet, insert just before the first
-    // heading (or at the top of an empty / heading-less document).
-    const uncatTasks = tasks.filter(t => t.section === "未分类");
-    if (uncatTasks.length > 0) {
-      newCardLineIndex = uncatTasks[uncatTasks.length - 1].lineIndex + 1;
-      lines.splice(newCardLineIndex, 0, newTaskLine);
-    } else if (sections.length > 0) {
-      newCardLineIndex = sections[0].lineIndex;
-      lines.splice(newCardLineIndex, 0, newTaskLine);
-    } else {
-      newCardLineIndex = 0;
-      lines.splice(0, 0, newTaskLine);
-    }
-  } else {
-    // Find last task in that section, or insert right after the section heading
-    const secTasks = tasks.filter(t => t.section === targetSection);
-    if (secTasks.length > 0) {
-      const insertAfter = secTasks[secTasks.length - 1].lineIndex;
-      newCardLineIndex = insertAfter + 1;
-      lines.splice(insertAfter + 1, 0, newTaskLine);
-    } else {
-      const secObj = sections.find(s => s.name === targetSection);
-      const insertAfter = secObj ? secObj.lineIndex : lines.length - 1;
-      newCardLineIndex = insertAfter + 1;
-      lines.splice(insertAfter + 1, 0, newTaskLine);
-    }
-  }
-
+  insertTaskLine(`- [ ] ${text}`, sectionSelect.value);
   newTaskInput.value = "";
-  saveToMarkdownFile(lines.join("\n"), "已新增待办");
 }
 
 // Render UI
@@ -2132,6 +2269,7 @@ function renderApp() {
     const navEl = document.createElement("div");
     const filterKey = `section:${name}`;
     navEl.className = `nav-item ${currentFilter === filterKey ? "active" : ""}`;
+    navEl.dataset.sectionName = name;
     navEl.innerHTML = `
       <div class="nav-label">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3L8 21"/><path d="M16 3l-2 18"/></svg>
@@ -2210,6 +2348,7 @@ function renderApp() {
       lastRenderedSection = task.section;
       const headerEl = document.createElement("div");
       headerEl.className = "section-group-header";
+      headerEl.dataset.sectionName = task.section;
       if (listEnterPending) headerEl.classList.add("card-enter");
       headerEl.innerHTML = `<span># ${escapeHtml(task.section)}</span>`;
       taskListContainer.appendChild(headerEl);
@@ -2716,6 +2855,174 @@ const rawMarkdownTextarea = document.getElementById("rawMarkdownTextarea");
 document.getElementById("btnRawMd").addEventListener("click", () => {
   rawMarkdownTextarea.value = rawContent;
   rawModal.classList.add("open");
+});
+
+// ---------- Sections: create / delete ----------
+function createSection(name) {
+  const clean = (name || "").replace(/^#+\s*/, "").trim();
+  if (!clean) { showToast("分类名不能为空"); return false; }
+  const { sections } = parseMarkdown(rawContent);
+  if (clean === "未分类" || sections.some(s => s.name === clean)) { showToast("已存在同名分类"); return false; }
+  const base = rawContent.replace(/\n+$/, "");
+  saveToMarkdownFile((base ? base + "\n\n" : "") + `# ${clean}\n`, "已新建分类");
+  showToast(`已新建分类 # ${clean}`);
+  setFilter(`section:${clean}`, clean);
+  return true;
+}
+
+function deleteSection(name) {
+  const { sections, lines } = parseMarkdown(rawContent);
+  const sec = sections.find(s => s.name === name);
+  if (!sec) return;
+  const removed = lines[sec.lineIndex];
+  lines.splice(sec.lineIndex, 1);
+  if (currentFilter === `section:${name}`) setFilter("all");
+  saveToMarkdownFile(lines.join("\n"), "已删除分类");
+  showToast(`已删除分类 # ${name}，里面的待办保留并归入相邻分类`, {
+    label: "撤销",
+    onClick: () => { restoreLine(sec.lineIndex, removed); showToast(`已恢复分类 # ${name}`); }
+  });
+}
+
+// ---------- Generic small dialog ----------
+const appModal = document.getElementById("appModal");
+const appModalTitle = document.getElementById("appModalTitle");
+const appModalInput = document.getElementById("appModalInput");
+const appModalSelect = document.getElementById("appModalSelect");
+let appModalSubmit = null;
+
+function fillSectionSelect(sel, selectedValue) {
+  const { sections } = parseMarkdown(rawContent);
+  sel.innerHTML = "";
+  const uncat = document.createElement("option");
+  uncat.value = "__uncategorized__";
+  uncat.textContent = "未分类";
+  sel.appendChild(uncat);
+  sections.forEach(sec => {
+    const opt = document.createElement("option");
+    opt.value = sec.name;
+    opt.textContent = `# ${sec.name}`;
+    sel.appendChild(opt);
+  });
+  if ([...sel.options].some(o => o.value === selectedValue)) sel.value = selectedValue;
+}
+
+function openAppModal(cfg) {
+  appModalTitle.textContent = cfg.title;
+  appModalInput.style.display = cfg.showInput === false ? "none" : "";
+  appModalInput.value = "";
+  appModalInput.placeholder = cfg.inputPlaceholder || "";
+  appModalSelect.style.display = cfg.showSelect ? "" : "none";
+  if (cfg.showSelect) fillSectionSelect(appModalSelect, cfg.selectValue || "__uncategorized__");
+  document.getElementById("appModalOk").textContent = cfg.okLabel || "确定";
+  appModalSubmit = cfg.onOk;
+  appModal.classList.add("open");
+  if (cfg.showInput !== false) setTimeout(() => appModalInput.focus(), 30);
+}
+
+function closeAppModal() {
+  appModal.classList.remove("open");
+  appModalSubmit = null;
+}
+
+document.getElementById("appModalOk").addEventListener("click", () => {
+  if (appModalSubmit && appModalSubmit({ text: appModalInput.value.trim(), value: appModalSelect.value }) !== false) closeAppModal();
+});
+document.getElementById("appModalCancel").addEventListener("click", closeAppModal);
+appModal.addEventListener("click", e => { if (e.target === appModal) closeAppModal(); });
+appModalInput.addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("appModalOk").click(); });
+
+function openSectionDialog() {
+  openAppModal({
+    title: "新建分类",
+    inputPlaceholder: "输入分类名，如：工作",
+    okLabel: "新建",
+    onOk: ({ text }) => createSection(text)
+  });
+}
+
+function openNewTaskDialog(defaultSection) {
+  openAppModal({
+    title: "新建待办",
+    inputPlaceholder: "输入待办内容",
+    showSelect: true,
+    selectValue: !defaultSection || defaultSection === "未分类" ? "__uncategorized__" : defaultSection,
+    okLabel: "添加",
+    onOk: ({ text, value }) => {
+      if (!text) { showToast("待办内容不能为空"); return false; }
+      insertTaskLine(`- [ ] ${text}`, value);
+      showToast("已新增待办");
+      return true;
+    }
+  });
+}
+
+function openMoveTaskDialog(lineIndex) {
+  const { tasks } = parseMarkdown(rawContent);
+  const task = tasks.find(t => t.lineIndex === lineIndex);
+  if (!task) return;
+  openAppModal({
+    title: "移动待办到…",
+    showInput: false,
+    showSelect: true,
+    selectValue: task.section === "未分类" ? "__uncategorized__" : task.section,
+    okLabel: "移动",
+    onOk: ({ value }) => { moveTaskLine(lineIndex, value); return true; }
+  });
+}
+
+document.getElementById("btnAddSection").addEventListener("click", openSectionDialog);
+
+// ---------- Custom context menu (the webview menu is suppressed) ----------
+const contextMenu = document.getElementById("contextMenu");
+function closeContextMenu() {
+  contextMenu.classList.remove("open");
+  contextMenu.innerHTML = "";
+}
+function openContextMenu(x, y, items) {
+  contextMenu.innerHTML = "";
+  items.forEach(it => {
+    const el = document.createElement("div");
+    el.className = `context-menu-item ${it.danger ? "danger" : ""}`;
+    el.textContent = it.label;
+    el.addEventListener("click", () => { closeContextMenu(); it.onClick(); });
+    contextMenu.appendChild(el);
+  });
+  contextMenu.classList.add("open");
+  const mw = contextMenu.offsetWidth, mh = contextMenu.offsetHeight;
+  contextMenu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - mw - 8))}px`;
+  contextMenu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - mh - 8))}px`;
+}
+document.addEventListener("click", e => { if (!contextMenu.contains(e.target)) closeContextMenu(); });
+window.addEventListener("blur", closeContextMenu);
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeContextMenu(); closeAppModal(); } });
+
+document.addEventListener("contextmenu", e => {
+  // Text fields keep the system edit menu (copy / paste); everywhere else
+  // the webview's menu (refresh / save as / print...) is suppressed.
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  e.preventDefault();
+  const card = e.target.closest(".task-card");
+  if (card && card.dataset.lineIndex != null) {
+    const lineIndex = Number(card.dataset.lineIndex);
+    const { tasks } = parseMarkdown(rawContent);
+    const task = tasks.find(t => t.lineIndex === lineIndex);
+    openContextMenu(e.clientX, e.clientY, [
+      { label: "新建待办", onClick: () => openNewTaskDialog(task ? task.section : "未分类") },
+      { label: "移动待办", onClick: () => openMoveTaskDialog(lineIndex) },
+      { label: "删除待办", danger: true, onClick: () => deleteTask(lineIndex) }
+    ]);
+    return;
+  }
+  const secEl = e.target.closest("[data-section-name]");
+  if (secEl) {
+    const name = secEl.dataset.sectionName;
+    const items = [{ label: "新增分类", onClick: openSectionDialog }];
+    if (name !== "未分类") items.push({ label: "删除分类", danger: true, onClick: () => deleteSection(name) });
+    openContextMenu(e.clientX, e.clientY, items);
+    return;
+  }
+  closeContextMenu();
 });
 
 document.getElementById("btnCloseModal").addEventListener("click", () => {
