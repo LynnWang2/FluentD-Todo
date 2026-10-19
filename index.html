@@ -642,18 +642,22 @@
     gap: 4px;
     overflow-y: auto;
     flex-shrink: 0;
+    transition: margin-left 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, visibility 0s linear 0.32s, background-color 0.25s ease, border-color 0.25s ease;
   }
 
-  /* Sidebar collapsed (toggle button, or auto-collapse in a narrow window) */
+  .fluent-window:not(.sidebar-collapsed) .sidebar {
+    transition: margin-left 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, visibility 0s, background-color 0.25s ease, border-color 0.25s ease;
+  }
+
+  /* Sidebar collapsed: slides out to the left (see Motion section too) */
   .fluent-window.sidebar-collapsed .sidebar {
-    display: none;
+    margin-left: -196px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
 
-  /* Narrow window: titlebar actions become icon-only, opacity slider shrinks */
-  .fluent-window.auto-narrow .titlebar-actions .icon-btn span,
-  .fluent-window.auto-narrow .opacity-bar > span {
-    display: none;
-  }
+  /* Narrow window: titlebar labels fade/collapse away (Motion section) */
 
   .fluent-window.auto-narrow .opacity-slider {
     width: 36px;
@@ -664,11 +668,8 @@
     opacity: 0.45;
   }
 
-  /* Squeezed titlebar: the brand text also goes, so the icon-only actions on
-     the right always fit instead of being clipped at the window edge. */
-  .fluent-window.auto-narrow .brand > span {
-    display: none;
-  }
+  /* Squeezed titlebar: the brand text collapses too (Motion section fades
+     it), so the icon-only actions on the right always fit */
 
   .fluent-window.auto-narrow .titlebar {
     padding: 0 10px;
@@ -894,9 +895,7 @@
     flex-shrink: 0;
   }
 
-  .fluent-window.auto-narrow #progressText {
-    display: none;
-  }
+  /* (narrow progressText collapse lives in the Motion section) */
 
   .search-box {
     position: relative;
@@ -1098,8 +1097,24 @@
   }
 
   .task-card.completed .task-text {
-    text-decoration: line-through;
     color: var(--text-muted);
+  }
+
+  /* Strikethrough is drawn by ::after (Motion section) so it can sweep in */
+  .task-text {
+    position: relative;
+  }
+
+  .task-card.completed .task-text::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 55%;
+    height: 1.5px;
+    background: currentColor;
+    opacity: 0.55;
+    transform-origin: left center;
   }
 
   .task-edit-input {
@@ -1332,6 +1347,149 @@
     color: var(--text-primary);
     resize: vertical;
     outline: none;
+  }
+
+  /* ============ Motion ============
+     Fluent-style micro-animations: only opacity/transform animate, 150-320ms,
+     one decelerating curve everywhere. */
+  :root {
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* App launch: the whole window fades/rises in once */
+  @keyframes appIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .fluent-window {
+    animation: appIn 0.38s var(--ease-out) both;
+  }
+
+  /* Card entrance (view switches / file open / newly added card): JS adds
+     .card-enter with a per-index animation-delay for the stagger */
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .card-enter {
+    animation: cardIn 0.34s var(--ease-out) both;
+  }
+
+  /* Deleting: the card collapses away, then FLIP slides the rest up */
+  .card-leaving {
+    overflow: hidden;
+    opacity: 0;
+    transition: height 0.19s ease, opacity 0.19s ease, padding-top 0.19s ease, padding-bottom 0.19s ease, margin 0.19s ease;
+  }
+
+  /* Freshly toggled card: the check draws itself and the strike sweeps in */
+  @keyframes drawCheck {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+  }
+
+  .fluent-checkbox svg polyline {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 0;
+  }
+
+  .task-card.just-toggled .fluent-checkbox.checked svg polyline {
+    animation: drawCheck 0.28s ease-out;
+  }
+
+  @keyframes strikeIn {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+
+  .task-card.just-toggled.completed .task-text::after {
+    animation: strikeIn 0.3s ease-out;
+  }
+
+  /* Dropdown panels pop: fade + 4px drop + 98% scale */
+  @keyframes popIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .file-menu-panel.open,
+  .view-switch-panel.open {
+    animation: popIn 0.18s var(--ease-out);
+    transform-origin: top center;
+  }
+
+  .fluent-window.sidebar-collapsed .compact-filters {
+    animation: popIn 0.25s var(--ease-out);
+  }
+
+  /* Theme switching: solid surfaces cross-fade their colors */
+  .titlebar, .pane-header, .file-toolbar, .task-card, .add-input,
+  .search-input, .section-select, .file-pill, .view-switch-panel,
+  .file-menu-panel, .task-edit-input {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+  }
+
+  /* Pressable controls: color cross-fade + a 96% press dip */
+  .icon-btn, .fluent-btn, .nav-item {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.13s ease;
+  }
+
+  .icon-btn:active, .fluent-btn:active, .nav-item:active, .file-pill:active {
+    transform: scale(0.96);
+  }
+
+  /* Narrow squeeze: labels fade and collapse instead of blinking out */
+  .titlebar-actions .icon-btn span,
+  .opacity-bar > span,
+  .brand > span {
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity 0.15s ease, max-width 0.25s var(--ease-out);
+  }
+
+  .titlebar-actions .icon-btn span { max-width: 90px; }
+  .opacity-bar > span { max-width: 60px; }
+  .brand > span { max-width: 140px; }
+
+  .fluent-window.auto-narrow .titlebar-actions .icon-btn span,
+  .fluent-window.auto-narrow .opacity-bar > span,
+  .fluent-window.auto-narrow .brand > span {
+    opacity: 0;
+    max-width: 0;
+  }
+
+  .fluent-window.auto-narrow .titlebar-actions .icon-btn {
+    gap: 0;
+  }
+
+  #progressText {
+    overflow: hidden;
+    max-width: 70px;
+    transition: opacity 0.15s ease, max-width 0.25s var(--ease-out);
+  }
+
+  .fluent-window.auto-narrow #progressText {
+    opacity: 0;
+    max-width: 0;
+  }
+
+  .fluent-window.auto-narrow .progress-row {
+    gap: 0;
+  }
+
+  .opacity-slider {
+    transition: width 0.25s var(--ease-out);
+  }
+
+  /* Honor the OS "reduce motion" setting */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 </style>
 </head>
@@ -1743,8 +1901,56 @@ async function pollExternalChanges() {
 }
 setInterval(pollExternalChanges, 500);
 
+// ---- Motion helpers ----
+// Entrance choreography flags, consumed by renderApp:
+let listEnterPending = true;    // stagger the next full-list render in
+let newCardLineIndex = null;    // a freshly added card animates in alone
+let justToggledLineIndex = null; // the just-checked card draws its checkmark
+
+// FLIP: snapshot card tops, mutate (re-renders synchronously), then glide
+// every surviving card from its old spot to its new one.
+function flipCards(mutate) {
+  const before = new Map();
+  document.querySelectorAll(".task-card").forEach(el => {
+    if (el.dataset.lineIndex != null) before.set(el.dataset.lineIndex, el.getBoundingClientRect().top);
+  });
+  mutate();
+  if (!before.size) return;
+  document.querySelectorAll(".task-card").forEach(el => {
+    const key = el.dataset.lineIndex;
+    if (key == null || !before.has(key)) return;
+    const dy = before.get(key) - el.getBoundingClientRect().top;
+    if (Math.abs(dy) < 2) return;
+    el.style.transition = "none";
+    el.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      el.style.transition = "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)";
+      el.style.transform = "";
+      setTimeout(() => { el.style.transition = ""; }, 330);
+    });
+  });
+}
+
+// Progress numbers count toward their new values instead of jumping.
+let shownDone = 0, shownTotal = 0, progressRaf = 0;
+function animateProgressText(done, total) {
+  if (progressRaf) cancelAnimationFrame(progressRaf);
+  const fromD = shownDone, fromT = shownTotal, start = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - start) / 280);
+    const e = 1 - Math.pow(1 - k, 3);
+    shownDone = Math.round(fromD + (done - fromD) * e);
+    shownTotal = Math.round(fromT + (total - fromT) * e);
+    progressText.textContent = `${shownDone} / ${shownTotal}`;
+    progressRaf = k < 1 ? requestAnimationFrame(step) : 0;
+  };
+  progressRaf = requestAnimationFrame(step);
+}
+
 // Task Operations
 function toggleTask(lineIndex) {
+  justToggledLineIndex = lineIndex;
+  flipCards(() => {
   const { lines } = parseMarkdown(rawContent);
   const line = lines[lineIndex];
   if (typeof line !== "string") return;
@@ -1753,6 +1959,7 @@ function toggleTask(lineIndex) {
     return `${prefix}${nextState}${suffix}`;
   });
   saveToMarkdownFile(lines.join("\n"), "状态已更新");
+  });
 }
 
 function updateTaskText(lineIndex, newText) {
@@ -1782,10 +1989,21 @@ function toggleTaskPriority(lineIndex) {
 }
 
 function deleteTask(lineIndex) {
-  const { lines } = parseMarkdown(rawContent);
-  lines.splice(lineIndex, 1);
-  saveToMarkdownFile(lines.join("\n"), "已删除待办");
-  showToast("已从 Markdown 中删除该条待办");
+  const doDelete = () => {
+    const { lines } = parseMarkdown(rawContent);
+    lines.splice(lineIndex, 1);
+    saveToMarkdownFile(lines.join("\n"), "已删除待办");
+    showToast("已从 Markdown 中删除该条待办");
+  };
+  const cardEl = document.querySelector(`.task-card[data-line-index="${lineIndex}"]`);
+  if (!cardEl) { doDelete(); return; }
+  // Collapse the doomed card first, then FLIP the survivors up into the gap.
+  cardEl.style.height = `${cardEl.offsetHeight}px`;
+  requestAnimationFrame(() => {
+    cardEl.classList.add("card-leaving");
+    cardEl.style.height = "0px";
+  });
+  setTimeout(() => flipCards(doDelete), 200);
 }
 
 function addNewTask() {
@@ -1802,10 +2020,13 @@ function addNewTask() {
     // heading (or at the top of an empty / heading-less document).
     const uncatTasks = tasks.filter(t => t.section === "未分类");
     if (uncatTasks.length > 0) {
-      lines.splice(uncatTasks[uncatTasks.length - 1].lineIndex + 1, 0, newTaskLine);
+      newCardLineIndex = uncatTasks[uncatTasks.length - 1].lineIndex + 1;
+      lines.splice(newCardLineIndex, 0, newTaskLine);
     } else if (sections.length > 0) {
-      lines.splice(sections[0].lineIndex, 0, newTaskLine);
+      newCardLineIndex = sections[0].lineIndex;
+      lines.splice(newCardLineIndex, 0, newTaskLine);
     } else {
+      newCardLineIndex = 0;
       lines.splice(0, 0, newTaskLine);
     }
   } else {
@@ -1813,10 +2034,12 @@ function addNewTask() {
     const secTasks = tasks.filter(t => t.section === targetSection);
     if (secTasks.length > 0) {
       const insertAfter = secTasks[secTasks.length - 1].lineIndex;
+      newCardLineIndex = insertAfter + 1;
       lines.splice(insertAfter + 1, 0, newTaskLine);
     } else {
       const secObj = sections.find(s => s.name === targetSection);
       const insertAfter = secObj ? secObj.lineIndex : lines.length - 1;
+      newCardLineIndex = insertAfter + 1;
       lines.splice(insertAfter + 1, 0, newTaskLine);
     }
   }
@@ -1847,7 +2070,7 @@ function renderApp() {
   const viewDone = viewTasks.filter(t => t.completed).length;
   const pct = viewTasks.length > 0 ? Math.round((viewDone / viewTasks.length) * 100) : 0;
   progressBar.style.width = `${pct}%`;
-  progressText.textContent = `${viewDone} / ${viewTasks.length}`;
+  animateProgressText(viewDone, viewTasks.length);
   const completedButton = document.getElementById("btnClearCompleted");
   completedButton.querySelector("span").textContent = hideCompletedTasks ? "显示已完成" : "隐藏已完成";
   completedButton.title = hideCompletedTasks ? "仅在应用中显示已完成的待办" : "仅在应用中隐藏已完成的待办";
@@ -1934,17 +2157,25 @@ function renderApp() {
     ((a.completed ? 1 : 0) - (b.completed ? 1 : 0)));
 
   let lastRenderedSection = null;
-  displayTasks.forEach(task => {
+  displayTasks.forEach((task, displayIdx) => {
     if (task.section !== lastRenderedSection && !currentFilter.startsWith("section:")) {
       lastRenderedSection = task.section;
       const headerEl = document.createElement("div");
       headerEl.className = "section-group-header";
+      if (listEnterPending) headerEl.classList.add("card-enter");
       headerEl.innerHTML = `<span># ${escapeHtml(task.section)}</span>`;
       taskListContainer.appendChild(headerEl);
     }
 
     const card = document.createElement("div");
     card.className = `task-card ${task.completed ? "completed" : ""} ${task.isSubtask ? "subtask" : ""}`;
+    card.dataset.lineIndex = task.lineIndex;
+    if (listEnterPending) {
+      card.classList.add("card-enter");
+      card.style.animationDelay = `${Math.min(displayIdx, 14) * 22}ms`;
+    }
+    if (task.lineIndex === newCardLineIndex) card.classList.add("card-enter");
+    if (task.lineIndex === justToggledLineIndex) card.classList.add("just-toggled");
 
     // Checkbox
     const checkbox = document.createElement("div");
@@ -2045,9 +2276,13 @@ function renderApp() {
     card.appendChild(actions);
     taskListContainer.appendChild(card);
   });
+  listEnterPending = false;
+  newCardLineIndex = null;
+  justToggledLineIndex = null;
 }
 
 function setFilter(filterKey, customLabel) {
+  listEnterPending = true;
   currentFilter = filterKey;
   document.querySelectorAll("#sidebarNav .nav-item[data-filter]").forEach(el => {
     el.classList.toggle("active", el.dataset.filter === filterKey);
@@ -2168,6 +2403,7 @@ document.getElementById("btnOpenFile").addEventListener("click", async () => {
     const content = await invoke("read_md_file", { path });
     currentFilePath = path;
     rawContent = content;
+    listEnterPending = true;
     fileNameLabel.textContent = getFileName(path);
     syncStatusText.textContent = `实时监听中 · ${new Date().toLocaleTimeString()}`;
     renderApp();
@@ -2221,17 +2457,32 @@ searchInput.addEventListener("input", e => {
 
 // Opacity Slider
 const opacitySlider = document.getElementById("opacitySlider");
-function applyOpacity(rawValue) {
-  const num = Number(rawValue);
-  const val = num / 100;
+// The slider sets a target; a rAF loop eases the painted value toward it,
+// so dragging feels like the glass itself is settling, not jumping.
+let opacityShown = null;
+let opacityTarget = null;
+let opacityRaf = 0;
+function paintOpacity(val) {
   document.documentElement.style.setProperty("--bg-alpha", val.toFixed(2));
   document.documentElement.style.setProperty("--card-alpha", Math.min(0.95, val + 0.08).toFixed(2));
   // Cool wash over the backdrop: fills exactly the share not covered by the
   // window surface, so sliding changes lightness, not hue.
   const covered = val * val * 0.97;
   document.documentElement.style.setProperty("--wash-alpha", ((1 - covered) * 0.30).toFixed(3));
+}
+function opacityTick() {
+  opacityShown += (opacityTarget - opacityShown) * 0.3;
+  if (Math.abs(opacityTarget - opacityShown) < 0.002) opacityShown = opacityTarget;
+  paintOpacity(opacityShown);
+  opacityRaf = opacityShown === opacityTarget ? 0 : requestAnimationFrame(opacityTick);
+}
+function applyOpacity(rawValue) {
+  const num = Number(rawValue);
+  opacityTarget = num / 100;
   const pct = ((num - Number(opacitySlider.min)) / (Number(opacitySlider.max) - Number(opacitySlider.min))) * 100;
   opacitySlider.style.setProperty("--opacity-pct", `${pct.toFixed(1)}%`);
+  if (opacityShown === null) { opacityShown = opacityTarget; paintOpacity(opacityShown); return; }
+  if (!opacityRaf) opacityRaf = requestAnimationFrame(opacityTick);
 }
 opacitySlider.addEventListener("input", e => applyOpacity(e.target.value));
 applyOpacity(opacitySlider.value);
