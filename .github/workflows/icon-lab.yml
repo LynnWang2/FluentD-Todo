@@ -13,7 +13,6 @@ jobs:
           LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
-          xcrun actool --version | head -3
       - name: ictool render attempts
         run: |
           set +e
@@ -30,13 +29,4 @@ jobs:
         with:
           name: icon-previews
           path: /tmp/previews
-          if-no-files-found: ignore
-
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: icon-real-output
-          path: |
-            /tmp/out-real/Assets.car
-            /tmp/out-real/AppIcon.icns
           if-no-files-found: ignore
