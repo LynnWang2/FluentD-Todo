@@ -1,40 +1,42 @@
+**简体中文** | [English](README.en.md)
+
 # Fluent MD Todo
 
-A lightweight desktop Markdown task manager built with Tauri 2, Rust, and the original Fluent MD Todo interface.
+一款轻量的桌面 Markdown 待办应用，基于 Tauri 2、Rust 与 Fluent MD Todo 原始界面构建。
 
-## Features
+## 功能
 
-- Open and edit Markdown task lists (`- [ ]` / `- [x]`) with headings and nested tasks.
-- Changes made in the app are written to the selected Markdown file immediately.
-- Re-reads the file regularly and refreshes the view when another app changes it.
-- Search, task filters, heading filters, priorities, tags, inline editing, deletion, and clearing completed tasks.
-- Raw Markdown editor, Markdown export, theme, opacity, and compact view controls.
-- Resizable native desktop window and native file dialogs.
+- 打开并编辑 Markdown 待办清单（`- [ ]` / `- [x]`），支持标题与嵌套任务。
+- 在应用内做的修改会立即写回所选的 Markdown 文件。
+- 定期重新读取文件；其他应用改动了文件时，视图会自动刷新。
+- 搜索、任务筛选、标题筛选、优先级、标签、行内编辑、删除，以及清除已完成任务。
+- Markdown 原文编辑、Markdown 导出、主题、不透明度与紧凑视图控制。
+- 可调整大小的原生桌面窗口与原生文件对话框。
 
-## Build on Windows
+## 在 Windows 上构建
 
-Install Node.js, pnpm, Rust 1.90 or newer, Microsoft C++ Build Tools, and WebView2 Runtime. Then run:
+安装 Node.js、pnpm、Rust 1.90 或更新版本、Microsoft C++ Build Tools 与 WebView2 Runtime，然后运行：
 
 ```powershell
 pnpm install
 pnpm tauri build
 ```
 
-The Windows installer is written to `src-tauri/target/release/bundle/` (NSIS/MSI, depending on the installed Windows tooling). To build only the executable without an installer, run `pnpm tauri build --no-bundle`; the executable is `src-tauri/target/release/fluent-md-todo.exe`.
+Windows 安装包会输出到 `src-tauri/target/release/bundle/`（NSIS/MSI，取决于本机安装的 Windows 工具链）。只构建可执行文件、不打安装包时运行 `pnpm tauri build --no-bundle`，可执行文件为 `src-tauri/target/release/fluent-md-todo.exe`。
 
-## Build on macOS
+## 在 macOS 上构建
 
-Install Node.js, pnpm, Rust 1.90 or newer, and Xcode Command Line Tools, then run:
+安装 Node.js、pnpm、Rust 1.90 或更新版本与 Xcode Command Line Tools，然后运行：
 
 ```sh
 pnpm install
 pnpm tauri build
 ```
 
-The macOS app bundle and disk image are written to `src-tauri/target/release/bundle/`. macOS release signing and notarization require the publisher's Apple Developer credentials. Build the macOS app on macOS; the Windows executable cannot be converted into a macOS app.
+macOS 的应用包与磁盘镜像会输出到 `src-tauri/target/release/bundle/`。正式发布的签名与公证需要发布者的 Apple Developer 凭据。macOS 应用请在 macOS 上构建；Windows 可执行文件无法转换成 macOS 应用。
 
-## Notes
+## 说明
 
-- Markdown stays in the user's chosen file; the app does not import it into a separate database.
-- The project currently targets Windows and macOS desktop. Mobile builds are intentionally out of scope for this version.
-- On Windows, the app uses the installed Microsoft Edge WebView2 runtime.
+- Markdown 始终保存在用户选择的文件里；应用不会把它导入单独的数据库。
+- 本项目目前面向 Windows 与 macOS 桌面端，本版本不考虑移动端构建。
+- Windows 上使用系统已安装的 Microsoft Edge WebView2 Runtime。
