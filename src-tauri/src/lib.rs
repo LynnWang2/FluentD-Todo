@@ -319,7 +319,7 @@ pub fn run() {
         tauri_plugin_autostart::MacosLauncher::LaunchAgent,
         Some(vec!["--autostart"]),
     ));
-    builder
+    let app = builder
         .on_window_event(|window, event| {
             // Closing the window hides it to the tray instead of quitting;
             // the app exits only from the tray menu （退出） or Cmd+Q.
