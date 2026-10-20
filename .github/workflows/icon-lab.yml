@@ -14,72 +14,37 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Compile corrected manifests (no root fill with specs)
+      - name: Build REAL AppIcon.icon + render previews
         run: |
           set +e
-          ASSETS=src-tauri/AppIcon.xcassets/AppIcon.appiconset
-          mk() {
-            rm -rf "/tmp/ic-$1" && mkdir -p "/tmp/ic-$1/AppIcon.icon/Assets"
-            cp "$ASSETS/icon-512x512@2x.png" "/tmp/ic-$1/AppIcon.icon/Assets/glyph.png"
-            cp "$ASSETS/icon-512x512@2x-dark.png" "/tmp/ic-$1/AppIcon.icon/Assets/glyph-dark.png"
-            cp "$2" "/tmp/ic-$1/AppIcon.icon/icon.json"
-          }
-          cat > /tmp/c6.json <<'JSON'
-          {
-            "fill-specializations": [
-              { "value": { "solid": "extended-srgb:0.00000,0.00000,1.00000,1.00000" } },
-              { "appearance": "dark", "value": { "solid": "extended-srgb:1.00000,0.00000,0.00000,1.00000" } }
-            ],
-            "groups": [
-              { "layers": [ { "image-name": "glyph.png", "name": "glyph" } ],
-                "shadow": { "kind": "neutral", "opacity": 0.5 },
-                "translucency": { "enabled": false, "value": 0.5 } }
-            ],
-            "supported-platforms": { "squares": "shared" },
-            "version": 1
-          }
-          JSON
-          cat > /tmp/c7.json <<'JSON'
-          {
-            "fill-specializations": [
-              { "value": { "solid": "extended-srgb:0.00000,0.00000,1.00000,1.00000" } },
-              { "appearance": "dark", "value": { "solid": "extended-srgb:1.00000,0.00000,0.00000,1.00000" } }
-            ],
-            "groups": [
-              { "layers": [
-                  { "image-name": "glyph.png",
-                    "image-name-specializations": [
-                      { "appearance": "dark", "value": "glyph-dark.png" }
-                    ],
-                    "name": "glyph" }
-                ],
-                "shadow": { "kind": "neutral", "opacity": 0.5 },
-                "translucency": { "enabled": false, "value": 0.5 } }
-            ],
-            "supported-platforms": { "squares": "shared" },
-            "version": 1
-          }
-          JSON
-          for C in c6 c7; do
-            mk "$C" "/tmp/$C.json"
-            rm -rf "/tmp/out-$C" && mkdir -p "/tmp/out-$C"
-            xcrun actool "/tmp/ic-$C/AppIcon.icon" --compile "/tmp/out-$C" --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist "/tmp/out-$C.plist" > "/tmp/actool-$C.log" 2>&1
-            echo "$C actool exit: $?"; cat "/tmp/actool-$C.log" | head -5
-            assetutil --info "/tmp/out-$C/Assets.car" > "/tmp/info-$C.json" 2>/dev/null
-          done
+          rm -rf /tmp/out-real && mkdir -p /tmp/out-real
+          xcrun actool src-tauri/AppIcon.icon --compile /tmp/out-real --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist /tmp/out-real.plist
+          echo "actool exit: $?"
+          ls -la /tmp/out-real
+          assetutil --info /tmp/out-real/Assets.car > /tmp/info-real.json 2>/dev/null
           python3 - <<'PYEOF'
           import json
-          for tag in ("c6", "c7"):
-              data = json.load(open(f"/tmp/info-{tag}.json"))
-              print(f"######## {tag}: {len(data)} entries")
-              for e in data:
-                  if "Color components" in e:
-                      print("COLOR:", e.get("Name"), e.get("Color components"))
-              for e in data:
-                  if e.get("AssetType") == "IconGroup":
-                      ly = e["Layers"][0]
-                      print("GROUP", e.get("Appearance"), "layer:", ly.get("Name"), "sha:", ly.get("SHA1Digest", "")[:10])
-                  if e.get("AssetType") == "IconImageStack":
-                      bg = e["Layers"][0]
-                      print("STACK", e.get("Appearance"), "bg:", bg.get("Name"), "sha:", bg.get("SHA1Digest", "")[:10], "comps:", bg.get("Color components"))
+          data = json.load(open("/tmp/info-real.json"))
+          print("entries:", len(data))
+          for e in data:
+              if "Color components" in e:
+                  print("COLOR:", e.get("Name"), [round(c, 3) for c in e.get("Color components")])
+              if e.get("AssetType") == "IconImageStack":
+                  bg = e["Layers"][0]
+                  print("STACK", e.get("Appearance"), "bg:", bg.get("Name"), "comps:", bg.get("Color components"), "grad-colors:", bg.get("Gradient Colors"))
+              if e.get("AssetType") == "IconGroup":
+                  ly = e["Layers"][0]
+                  print("GROUP", e.get("Appearance"), "layer:", ly.get("Name"), "size:", ly.get("LayerSize"), "sha:", ly.get("SHA1Digest", "")[:10])
           PYEOF
+          echo "== ictool hunt =="
+          find "/Applications/Xcode_26.6.0.app/Contents/Applications/Icon Composer.app" -name "ictool*" 2>/dev/null
+          find "$(xcode-select -p)" -name "ictool*" 2>/dev/null | head -3
+      - name: Upload previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: icon-real-output
+          path: |
+            /tmp/out-real/Assets.car
+            /tmp/out-real/AppIcon.icns
+          if-no-files-found: ignore
