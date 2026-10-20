@@ -14,7 +14,7 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Compile experiments - hand-authored .icon variants
+      - name: Compile + assetutil deep inspection
         run: |
           set +e
           ASSETS=src-tauri/AppIcon.xcassets/AppIcon.appiconset
@@ -36,25 +36,13 @@ jobs:
             "version": 1
           }
           JSON
-          cat > /tmp/c2.json <<'JSON'
+          cat > /tmp/c3.json <<'JSON'
           {
             "fill": { "solid": "extended-srgb:0.200,0.600,1.000,1.000" },
             "fill-specializations": [
               { "appearance": "dark", "value": { "solid": "extended-srgb:0.020,0.050,0.100,1.000" } }
             ],
             "groups": [
-              { "layers": [ { "image-name": "glyph.png", "name": "glyph" } ],
-                "shadow": { "kind": "neutral", "opacity": 0.5 },
-                "translucency": { "enabled": false, "value": 0.5 } }
-            ],
-            "supported-platforms": { "squares": "shared" },
-            "version": 1
-          }
-          JSON
-          cat > /tmp/c3.json <<'JSON'
-          {
-            "fill": { "solid": "extended-srgb:0.200,0.600,1.000,1.000" },
-            "groups": [
               { "layers": [
                   { "image-name": "glyph.png",
                     "image-name-specializations": [
@@ -69,36 +57,30 @@ jobs:
             "version": 1
           }
           JSON
-          cat > /tmp/c4.json <<'JSON'
-          {
-            "fill": { "automatic-gradient": "extended-srgb:0.510,0.760,0.940,1.000" },
-            "fill-specializations": [
-              { "appearance": "dark", "value": { "automatic-gradient": "extended-srgb:0.050,0.100,0.160,1.000" } }
-            ],
-            "groups": [
-              { "layers": [
-                  { "image-name": "glyph.png",
-                    "image-name-specializations": [
-                      { "appearance": "dark", "value": "glyph-dark.png" }
-                    ],
-                    "name": "glyph" }
-                ],
-                "shadow": { "kind": "neutral", "opacity": 0.5 },
-                "translucency": { "enabled": false, "value": 0.5 } }
-            ],
-            "supported-platforms": { "squares": "shared" },
-            "version": 1
-          }
-          JSON
-          for C in c1 c2 c3 c4; do
+          for C in c1 c3; do
             mk "$C" "/tmp/$C.json"
-            echo "================ $C (bundle as input) ================"
             rm -rf "/tmp/out-$C" && mkdir -p "/tmp/out-$C"
-            xcrun actool "/tmp/ic-$C/AppIcon.icon" --compile "/tmp/out-$C" --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist "/tmp/out-$C.plist"
-            echo "actool exit: $?"
-            ls -la "/tmp/out-$C"
-            echo "dark strings in $C car:"
-            strings "/tmp/out-$C/Assets.car" 2>/dev/null | grep -ci dark
-            echo "rendition names in $C car:"
-            strings "/tmp/out-$C/Assets.car" 2>/dev/null | grep -E "glyph|\.png" | sort -u | head -20
+            xcrun actool "/tmp/ic-$C/AppIcon.icon" --compile "/tmp/out-$C" --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist "/tmp/out-$C.plist" > /dev/null 2>&1
+            echo "================ $C ================"
+            echo "-- partial plist --"
+            cat "/tmp/out-$C.plist"
+            echo "-- assetutil summary ($C) --"
+            xcrun -f assetutil || which assetutil || ls "$(xcode-select -p)/usr/bin" | grep asset
+            assetutil --info "/tmp/out-$C/Assets.car" > "/tmp/info-$C.json" 2>/dev/null || /usr/bin/assetutil --info "/tmp/out-$C/Assets.car" > "/tmp/info-$C.json"
+            python3 - "/tmp/info-$C.json" <<'PYEOF'
+          import json, sys, collections
+          data = json.load(open(sys.argv[1]))
+          print("total entries:", len(data))
+          keys = collections.Counter()
+          for e in data:
+              keys.update(e.keys())
+          print("entry keys:", dict(keys))
+          for e in data:
+              name = e.get("RenditionName") or e.get("Name") or ""
+              if "Appearance" in json.dumps(e) or "appearance" in json.dumps(e).lower():
+                  print("APPEARANCE ENTRY:", {k: v for k, v in e.items() if k in ("Name", "RenditionName", "AppearanceName", "CSIAppearance", "SizeOnDisk", "PixelWidth", "PixelHeight")})
+          names = [e.get("RenditionName") for e in data if e.get("RenditionName")]
+          print("rendition name samples:", names[:6])
+          print("asset names:", sorted(set(e.get("Name", "") for e in data))[:20])
+          PYEOF
           done
