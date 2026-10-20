@@ -232,6 +232,83 @@ mod windows_autostart {
     }
 }
 
+/// Set once a real quit starts (tray 退出 / Cmd+Q), so the close-to-tray
+/// interception in on_window_event lets the final window closes through.
+static QUITTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Show the main window and focus it (tray click / Dock reopen / tray menu).
+#[cfg(desktop)]
+fn show_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+#[cfg(desktop)]
+fn toggle_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            show_main_window(app);
+        }
+    }
+}
+
+/// System tray (Windows) / menu-bar extra (macOS): closing the window only
+/// hides it (see on_window_event in run()); the app keeps living in the
+/// tray, and the tray icon brings the window back. The mac icon is a
+/// monochrome template image; Windows uses the app icon.
+#[cfg(desktop)]
+fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+    let show_item = MenuItem::with_id(app, "tray_show", "打开 Fluent MD Todo", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "tray_quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+    let mut builder = TrayIconBuilder::with_id("main-tray")
+        .menu(&menu)
+        .tooltip("Fluent MD Todo")
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "tray_show" => show_main_window(app),
+            "tray_quit" => {
+                QUITTING.store(true, std::sync::atomic::Ordering::Relaxed);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main_window(tray.app_handle());
+            }
+        });
+
+    #[cfg(target_os = "macos")]
+    {
+        let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-mac.png"))?;
+        builder = builder.icon(icon).icon_as_template(true);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(icon) = app.default_window_icon() {
+            builder = builder.icon(icon.clone());
+        }
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -243,6 +320,16 @@ pub fn run() {
         Some(vec!["--autostart"]),
     ));
     builder
+        .on_window_event(|window, event| {
+            // Closing the window hides it to the tray instead of quitting;
+            // the app exits only from the tray menu （退出） or Cmd+Q.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if !QUITTING.load(std::sync::atomic::Ordering::Relaxed) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -258,6 +345,7 @@ pub fn run() {
                     #[cfg(target_os = "windows")]
                     let _ = window.set_shadow(false);
                 }
+                build_tray(app)?;
             }
             Ok(())
         })
@@ -272,6 +360,22 @@ pub fn run() {
             set_autostart_state,
             set_window_corner_radius
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to run Fluent MD Todo");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            QUITTING.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        // Clicking the Dock icon while the window is hidden in the tray
+        // brings it back (macOS sends Reopen, Tauri does not show by itself).
+        #[cfg(target_os = "macos")]
+        {
+            if let tauri::RunEvent::Reopen { .. } = event {
+                show_main_window(app_handle);
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = app_handle;
+    });
 }
