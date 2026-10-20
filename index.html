@@ -1771,8 +1771,9 @@
     </div>
 
     <div class="btn-group">
-      <button class="fluent-btn" id="btnClearCompleted" title="仅在应用中隐藏已完成的待办">
-        <span>隐藏已完成</span>
+      <button class="fluent-btn" id="btnClearCompleted" title="仅在应用中隐藏已完成的待办" aria-label="隐藏或显示已完成的待办">
+        <svg class="eye-open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M2.5 12c2.8 3.8 6 5.5 9.5 5.5s6.7-1.7 9.5-5.5"/><path d="M6.2 15.2 5 17.8M12 17.4v2.8M17.8 15.2l1.2 2.6"/></svg>
       </button>
     </div>
   </section>
@@ -2346,7 +2347,8 @@ function renderApp() {
   progressBar.style.width = `${pct}%`;
   animateProgressText(viewDone, viewTasks.length);
   const completedButton = document.getElementById("btnClearCompleted");
-  completedButton.querySelector("span").textContent = hideCompletedTasks ? "显示已完成" : "隐藏已完成";
+  completedButton.querySelector(".eye-open").style.display = hideCompletedTasks ? "none" : "";
+  completedButton.querySelector(".eye-closed").style.display = hideCompletedTasks ? "" : "none";
   completedButton.title = hideCompletedTasks ? "仅在应用中显示已完成的待办" : "仅在应用中隐藏已完成的待办";
 
   // Render Sidebar Sections
