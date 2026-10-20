@@ -1956,6 +1956,15 @@ const DEFAULT_MD = `# 今日重点工作
 // Application State
 let rawContent = DEFAULT_MD;
 let currentFilePath = null;
+// Undo/redo history: content snapshots taken at saveToMarkdownFile (the one
+// funnel every edit flows through). Switching files resets both stacks.
+const undoStack = [];
+const redoStack = [];
+let historyBypass = false;
+function resetHistory() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
 let pendingWrites = 0;
 let isPolling = false;
 let writeQueue = Promise.resolve();
@@ -2103,6 +2112,11 @@ function showLastSaved() {
 
 // Writes open the file only for the duration of this operation.
 async function saveToMarkdownFile(newMdText, reason = "已保存") {
+  if (!historyBypass && newMdText !== rawContent) {
+    undoStack.push(rawContent);
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack.length = 0;
+  }
   rawContent = newMdText;
   renderApp();
 
@@ -2129,6 +2143,39 @@ async function saveToMarkdownFile(newMdText, reason = "已保存") {
   }
 }
 
+// Undo / redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y). Inside text fields
+// the native text undo wins; everywhere else the document history applies.
+function undoEdit() {
+  if (!undoStack.length) return;
+  const prev = undoStack.pop();
+  redoStack.push(rawContent);
+  historyBypass = true;
+  saveToMarkdownFile(prev, "已撤销");
+  historyBypass = false;
+  showToast("已撤销");
+}
+
+function redoEdit() {
+  if (!redoStack.length) return;
+  const next = redoStack.pop();
+  undoStack.push(rawContent);
+  historyBypass = true;
+  saveToMarkdownFile(next, "已重做");
+  historyBypass = false;
+  showToast("已重做");
+}
+
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const key = e.key.toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  e.preventDefault();
+  if (key === "y" || e.shiftKey) redoEdit();
+  else undoEdit();
+});
+
 // Re-read briefly every 500ms; no file handle remains open between polls.
 async function pollExternalChanges() {
   if (!currentFilePath || pendingWrites > 0 || isPolling || editingLineIndex !== null) return;
@@ -2138,6 +2185,7 @@ async function pollExternalChanges() {
     const diskText = await invoke("read_md_file", { path });
     if (path === currentFilePath && diskText.replace(/\r\n/g, "\n") !== rawContent.replace(/\r\n/g, "\n")) {
       rawContent = diskText;
+      redoStack.length = 0;
       renderApp();
       syncStatusText.textContent = `检测到外部修改并刷新 · ${new Date().toLocaleTimeString()}`;
       showToast("已同步外部编辑器对 .md 文件的修改");
@@ -2745,6 +2793,7 @@ document.getElementById("btnOpenFile").addEventListener("click", async () => {
     const content = await invoke("read_md_file", { path });
     currentFilePath = path;
     rawContent = content;
+    resetHistory();
     listEnterPending = true;
     fileNameLabel.textContent = getFileName(path);
     syncStatusText.textContent = `实时监听中 · ${new Date().toLocaleTimeString()}`;
@@ -2765,6 +2814,7 @@ document.getElementById("btnCreateFile").addEventListener("click", async () => {
     });
     if (!path) return;
     currentFilePath = path;
+    resetHistory();
     await invoke("remember_md_file", { path });
     fileNameLabel.textContent = getFileName(path);
     await saveToMarkdownFile(rawContent, "新建文件");
@@ -3413,6 +3463,7 @@ if (window.__TAURI_INTERNALS__) {
       if (lastFile) {
         currentFilePath = lastFile.path;
         rawContent = lastFile.content;
+        resetHistory();
         fileNameLabel.textContent = getFileName(lastFile.path);
         syncStatusText.textContent = `实时监听中 · ${new Date().toLocaleTimeString()}`;
       }
