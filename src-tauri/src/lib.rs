@@ -247,22 +247,23 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
-#[cfg(desktop)]
-fn toggle_main_window(app: &tauri::AppHandle) {
-    use tauri::Manager;
-    if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
-        } else {
-            show_main_window(app);
-        }
-    }
+/// macOS: after the right-click menu pops, detach it again right away.
+/// tray-icon 0.24 keeps a menu pinned to the NSStatusItem and macOS 27's
+/// AppKit then pops that menu on ANY click and swallows the left click
+/// before TrayIconEvent::Click fires; upstream fixed this in tray-icon
+/// 0.25.1 (mount only for the pop) but tauri 2.11.x pins tray-icon ^0.24,
+/// so replicate the fix at the app layer (same approach as DuckColorPicker).
+#[cfg(target_os = "macos")]
+fn detach_tray_menu<R: tauri::Runtime>(tray: &tauri::tray::TrayIcon<R>) {
+    let _ = tray.set_menu(None::<tauri::menu::Menu<R>>);
 }
 
 /// System tray (Windows) / menu-bar extra (macOS): closing the window only
 /// hides it (see on_window_event in run()); the app keeps living in the
-/// tray, and the tray icon brings the window back. The mac icon is a
-/// monochrome template image; Windows uses the app icon.
+/// tray, and the tray icon brings the window back. A single LEFT click
+/// opens the window directly; the menu （打开 / 退出） appears on RIGHT
+/// click only. The mac icon is a monochrome template image; Windows uses
+/// the app icon.
 #[cfg(desktop)]
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem};
@@ -273,7 +274,6 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
-        .menu(&menu)
         .tooltip("Fluent MD Todo")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "tray_show" => show_main_window(app),
@@ -282,17 +282,56 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
                 app.exit(0);
             }
             _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                toggle_main_window(tray.app_handle());
-            }
         });
+
+    // Windows: the menu stays attached and the OS shows it on right-click;
+    // show_menu_on_left_click(false) routes left clicks to the event below.
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder = builder
+            .menu(&menu)
+            .show_menu_on_left_click(false)
+            .on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    show_main_window(tray.app_handle());
+                }
+            });
+    }
+
+    // macOS: NO menu attached by default (see detach_tray_menu) — left click
+    // reaches the handler and opens the window; on right-button DOWN the
+    // menu is attached just long enough to pop, then detached again.
+    #[cfg(target_os = "macos")]
+    {
+        let menu_for_event = menu.clone();
+        builder = builder
+            .show_menu_on_left_click(false)
+            .on_tray_icon_event(move |tray, event| {
+                if let TrayIconEvent::Click {
+                    button,
+                    button_state,
+                    ..
+                } = event
+                {
+                    match (button, button_state) {
+                        (MouseButton::Left, MouseButtonState::Up) => {
+                            show_main_window(tray.app_handle());
+                        }
+                        (MouseButton::Right, MouseButtonState::Down) => {
+                            let _ = tray.set_menu(Some(menu_for_event.clone()));
+                            let _ = tray.with_inner_tray_icon(|inner| inner.show_menu());
+                            detach_tray_menu(tray);
+                        }
+                        _ => {}
+                    }
+                }
+            });
+    }
 
     #[cfg(target_os = "macos")]
     {
