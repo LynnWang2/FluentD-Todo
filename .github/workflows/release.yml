@@ -32,6 +32,24 @@ jobs:
           toolchain: 1.90.0
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - run: pnpm install --frozen-lockfile
+      - name: Compile macOS icon appearance variants (Assets.car)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          xcrun actool src-tauri/AppIcon.xcassets \
+            --compile src-tauri \
+            --app-icon AppIcon \
+            --include-all-app-icons \
+            --target-device mac \
+            --platform macosx \
+            --minimum-deployment-target 11.0 \
+            --output-partial-info-plist /tmp/appicon-partial.plist
+          test -f src-tauri/Assets.car
+      - name: Wire Assets.car into the bundle config (macOS only)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          jq '.bundle.resources = ["Assets.car"] | .bundle.macOS.infoPlist = "macos-Info.plist"' \
+            src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          mv /tmp/tauri.conf.json src-tauri/tauri.conf.json
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -39,15 +57,17 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Fluent MD Todo v__VERSION__"
           releaseBody: |
-            Fluent MD Todo v1.2.0 更新：
+            Fluent MD Todo v1.3.0 更新：
 
-            - 全套过渡动画：切视图卡片错峰淡入、勾选后卡片平滑沉底、删除收拢消退、侧边栏滑动、面板弹出、主题渐变、启动淡入（跟随系统「减少动态效果」自动降级）
-            - 分类管理：「待办分类」旁 + 新建分类；右键分类可新增/删除分类（删分类保留待办并归入相邻分类，可撤销）
-            - 自定义右键菜单（屏蔽网页菜单，输入框里保留系统编辑菜单）：右键待办可新建待办 / 移动待办（弹窗选分类）/ 删除待办
-            - 通知弹窗改到底部居中；删除待办的弹窗带可点击「撤销」，误删一键恢复
-            - 自启动改看图标状态：未开启镂空火箭、开启实心火箭，按钮框线与底色不再变化
-            - 圆角统一：源码编辑框、待办编辑框改 6px，与其他输入框一致
-            - 包含 v1.1.0 全部改进（毛玻璃主题同步、原生窗口圆角、单按钮三档主题、已完成沉底、按类别进度等）
+            - 全新应用图标：浅色蓝渐变清单图标；macOS 26 深色模式下 Dock 图标自动切换为深色版；软件内左上角品牌图标同步换新（深色主题下同样变深）
+            - 每分类快速添加：每个分类（含空分类）底部都有一行与待办卡等大的新增行，「+」与方框对齐、文字与待办文字对齐，点行输入、回车即加进该分类，可连续添加
+            - 标题旁的章节切换 ∨ 改为常驻：侧栏展开时也在，并更贴近标题
+            - 编辑待办改为无边框原地编辑：点开直接打字，没有多余框线，文字不跳位
+            - 响应式阈值拆分：顶栏文字在窗口窄于 680px 才收起，侧栏在 620px 才自动隐藏，不再过早收起
+            - 窗口控制按钮图形对齐：最小化横线回到与方框、关闭叉共同的中线
+            - 底部分类下拉箭头改自定义样式，右侧间距修正
+            - 修复 macOS 窗口圆角原生调用的线程安全隐患（同类问题曾导致 Apple Silicon 闪退）
+            - 包含 v1.2.0 全部改进（全套过渡动画、分类管理、自定义右键菜单、撤销删除等）
 
             macOS：通用版（Apple Silicon + Intel）DMG，未签名，首次打开请右键点 App 选「打开」。
             Windows：NSIS 安装包。
