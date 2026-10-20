@@ -14,30 +14,91 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Recon 4 - full JSON key inventory of IconComposer frameworks
+      - name: Compile experiments - hand-authored .icon variants
         run: |
-          IC="/Applications/Xcode_26.6.0.app/Contents/Applications/Icon Composer.app/Contents/Frameworks"
-          for FW in IconComposerFoundation IconRendering IconComposerKit; do
-            BIN=$(find "$IC/$FW.framework" -type f -perm -111 2>/dev/null | head -1)
-            echo "===== $FW -> $BIN"
-            if [ -n "$BIN" ]; then
-              echo "-- key-shaped tokens --"
-              strings "$BIN" | grep -E "^[a-z][a-z0-9-]{2,32}$" | sort -u | head -120
-              echo "-- special/appearance/platform hits --"
-              strings "$BIN" | grep -iE "special|appearance|platform|display-mode|color-scheme" | sort -u | head -40
-            fi
+          set +e
+          ASSETS=src-tauri/AppIcon.xcassets/AppIcon.appiconset
+          mk() {
+            rm -rf "/tmp/ic-$1" && mkdir -p "/tmp/ic-$1/AppIcon.icon/Assets"
+            cp "$ASSETS/icon-512x512@2x.png" "/tmp/ic-$1/AppIcon.icon/Assets/glyph.png"
+            cp "$ASSETS/icon-512x512@2x-dark.png" "/tmp/ic-$1/AppIcon.icon/Assets/glyph-dark.png"
+            cp "$2" "/tmp/ic-$1/AppIcon.icon/icon.json"
+          }
+          cat > /tmp/c1.json <<'JSON'
+          {
+            "fill": { "solid": "extended-srgb:0.200,0.600,1.000,1.000" },
+            "groups": [
+              { "layers": [ { "image-name": "glyph.png", "name": "glyph" } ],
+                "shadow": { "kind": "neutral", "opacity": 0.5 },
+                "translucency": { "enabled": false, "value": 0.5 } }
+            ],
+            "supported-platforms": { "squares": "shared" },
+            "version": 1
+          }
+          JSON
+          cat > /tmp/c2.json <<'JSON'
+          {
+            "fill": { "solid": "extended-srgb:0.200,0.600,1.000,1.000" },
+            "fill-specializations": [
+              { "appearance": "dark", "value": { "solid": "extended-srgb:0.020,0.050,0.100,1.000" } }
+            ],
+            "groups": [
+              { "layers": [ { "image-name": "glyph.png", "name": "glyph" } ],
+                "shadow": { "kind": "neutral", "opacity": 0.5 },
+                "translucency": { "enabled": false, "value": 0.5 } }
+            ],
+            "supported-platforms": { "squares": "shared" },
+            "version": 1
+          }
+          JSON
+          cat > /tmp/c3.json <<'JSON'
+          {
+            "fill": { "solid": "extended-srgb:0.200,0.600,1.000,1.000" },
+            "groups": [
+              { "layers": [
+                  { "image-name": "glyph.png",
+                    "image-name-specializations": [
+                      { "appearance": "dark", "value": "glyph-dark.png" }
+                    ],
+                    "name": "glyph" }
+                ],
+                "shadow": { "kind": "neutral", "opacity": 0.5 },
+                "translucency": { "enabled": false, "value": 0.5 } }
+            ],
+            "supported-platforms": { "squares": "shared" },
+            "version": 1
+          }
+          JSON
+          cat > /tmp/c4.json <<'JSON'
+          {
+            "fill": { "automatic-gradient": "extended-srgb:0.510,0.760,0.940,1.000" },
+            "fill-specializations": [
+              { "appearance": "dark", "value": { "automatic-gradient": "extended-srgb:0.050,0.100,0.160,1.000" } }
+            ],
+            "groups": [
+              { "layers": [
+                  { "image-name": "glyph.png",
+                    "image-name-specializations": [
+                      { "appearance": "dark", "value": "glyph-dark.png" }
+                    ],
+                    "name": "glyph" }
+                ],
+                "shadow": { "kind": "neutral", "opacity": 0.5 },
+                "translucency": { "enabled": false, "value": 0.5 } }
+            ],
+            "supported-platforms": { "squares": "shared" },
+            "version": 1
+          }
+          JSON
+          for C in c1 c2 c3 c4; do
+            mk "$C" "/tmp/$C.json"
+            echo "================ $C (bundle as input) ================"
+            rm -rf "/tmp/out-$C" && mkdir -p "/tmp/out-$C"
+            xcrun actool "/tmp/ic-$C/AppIcon.icon" --compile "/tmp/out-$C" --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist "/tmp/out-$C.plist"
+            echo "actool exit: $?"
+            ls -la "/tmp/out-$C"
+            echo "dark strings in $C car:"
+            strings "/tmp/out-$C/Assets.car" 2>/dev/null | grep -ci dark
+            echo "rendition names in $C car:"
+            strings "/tmp/out-$C/Assets.car" 2>/dev/null | grep -E "glyph|\.png" | sort -u | head -20
           done
-      - name: Baseline A - current appiconset, deployment 11
-        run: |
-          rm -rf /tmp/expA && mkdir -p /tmp/expA
-          xcrun actool src-tauri/AppIcon.xcassets --compile /tmp/expA --app-icon AppIcon --include-all-app-icons --target-device mac --platform macosx --minimum-deployment-target 11.0 --output-partial-info-plist /tmp/expA.plist || true
-          echo "dark strings in A:"
-          strings /tmp/expA/Assets.car 2>/dev/null | grep -ci dark || true
-      - name: Baseline B - current appiconset, deployment 26
-        run: |
-          rm -rf /tmp/expB && mkdir -p /tmp/expB
-          xcrun actool src-tauri/AppIcon.xcassets --compile /tmp/expB --app-icon AppIcon --include-all-app-icons --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist /tmp/expB.plist || true
-          echo "dark strings in B:"
-          strings /tmp/expB/Assets.car 2>/dev/null | grep -ci dark || true
-          echo "rendition names in B:"
-          strings /tmp/expB/Assets.car 2>/dev/null | grep -E "^icon-" | sort -u || true
