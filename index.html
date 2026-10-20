@@ -2237,19 +2237,20 @@ function deleteTask(lineIndex) {
   setTimeout(() => flipCards(doDelete), 200);
 }
 
-// Where a new line lands for a target section: after the section's last
-// task, right after its heading when empty; for 未分类 after the last
-// uncategorized task / before the first heading / at the very top.
+// Where a new line lands for a target section: as the section's FIRST task
+// (before its current first task), right after its heading when empty;
+// for 未分类 before the first uncategorized task / before the first
+// heading / at the very top.
 function insertionIndexFor(parsed, targetSection) {
   const { lines, sections, tasks } = parsed;
   if (targetSection === "__uncategorized__" || targetSection === "未分类") {
     const uncatTasks = tasks.filter(t => t.section === "未分类");
-    if (uncatTasks.length > 0) return uncatTasks[uncatTasks.length - 1].lineIndex + 1;
+    if (uncatTasks.length > 0) return uncatTasks[0].lineIndex;
     if (sections.length > 0) return sections[0].lineIndex;
     return 0;
   }
   const secTasks = tasks.filter(t => t.section === targetSection);
-  if (secTasks.length > 0) return secTasks[secTasks.length - 1].lineIndex + 1;
+  if (secTasks.length > 0) return secTasks[0].lineIndex;
   const secObj = sections.find(s => s.name === targetSection);
   return secObj ? secObj.lineIndex + 1 : lines.length;
 }
