@@ -14,7 +14,7 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Compile + stack-level diff (red-fill trick)
+      - name: Compile corrected manifests (no root fill with specs)
         run: |
           set +e
           ASSETS=src-tauri/AppIcon.xcassets/AppIcon.appiconset
@@ -24,9 +24,12 @@ jobs:
             cp "$ASSETS/icon-512x512@2x-dark.png" "/tmp/ic-$1/AppIcon.icon/Assets/glyph-dark.png"
             cp "$2" "/tmp/ic-$1/AppIcon.icon/icon.json"
           }
-          cat > /tmp/c1.json <<'JSON'
+          cat > /tmp/c6.json <<'JSON'
           {
-            "fill": { "solid": "extended-srgb:0.000,0.000,1.000,1.000" },
+            "fill-specializations": [
+              { "value": { "solid": "extended-srgb:0.00000,0.00000,1.00000,1.00000" } },
+              { "appearance": "dark", "value": { "solid": "extended-srgb:1.00000,0.00000,0.00000,1.00000" } }
+            ],
             "groups": [
               { "layers": [ { "image-name": "glyph.png", "name": "glyph" } ],
                 "shadow": { "kind": "neutral", "opacity": 0.5 },
@@ -36,11 +39,11 @@ jobs:
             "version": 1
           }
           JSON
-          cat > /tmp/c5.json <<'JSON'
+          cat > /tmp/c7.json <<'JSON'
           {
-            "fill": { "solid": "extended-srgb:0.000,0.000,1.000,1.000" },
             "fill-specializations": [
-              { "appearance": "dark", "value": { "solid": "extended-srgb:1.000,0.000,0.000,1.000" } }
+              { "value": { "solid": "extended-srgb:0.00000,0.00000,1.00000,1.00000" } },
+              { "appearance": "dark", "value": { "solid": "extended-srgb:1.00000,0.00000,0.00000,1.00000" } }
             ],
             "groups": [
               { "layers": [
@@ -57,26 +60,26 @@ jobs:
             "version": 1
           }
           JSON
-          for C in c1 c5; do
+          for C in c6 c7; do
             mk "$C" "/tmp/$C.json"
             rm -rf "/tmp/out-$C" && mkdir -p "/tmp/out-$C"
-            xcrun actool "/tmp/ic-$C/AppIcon.icon" --compile "/tmp/out-$C" --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist "/tmp/out-$C.plist" > /dev/null 2>&1
+            xcrun actool "/tmp/ic-$C/AppIcon.icon" --compile "/tmp/out-$C" --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist "/tmp/out-$C.plist" > "/tmp/actool-$C.log" 2>&1
+            echo "$C actool exit: $?"; cat "/tmp/actool-$C.log" | head -5
             assetutil --info "/tmp/out-$C/Assets.car" > "/tmp/info-$C.json" 2>/dev/null
           done
           python3 - <<'PYEOF'
           import json
-          def load(p):
-              return json.load(open(p))
-          for tag, path in (("C1", "/tmp/info-c1.json"), ("C5", "/tmp/info-c5.json")):
-              data = load(path)
+          for tag in ("c6", "c7"):
+              data = json.load(open(f"/tmp/info-{tag}.json"))
               print(f"######## {tag}: {len(data)} entries")
               for e in data:
-                  keys = set(e.keys())
-                  if "Appearances" in keys:
-                      print("HEADER Appearances:", e["Appearances"])
-                  if "Color components" in keys:
-                      print("COLOR:", e.get("Name"), e.get("Color components"), e.get("Colorspace"))
-                  if e.get("RenditionName", "").endswith((".iconstack",)) or e.get("RenditionName") == "IconGroup" or "Appearance" in keys:
-                      keep = {k: v for k, v in e.items() if k in ("Name", "RenditionName", "Appearance", "LayerCount", "Layers", "Template Mode", "AssetType")}
-                      print("STACK/APP:", json.dumps(keep)[:600])
+                  if "Color components" in e:
+                      print("COLOR:", e.get("Name"), e.get("Color components"))
+              for e in data:
+                  if e.get("AssetType") == "IconGroup":
+                      ly = e["Layers"][0]
+                      print("GROUP", e.get("Appearance"), "layer:", ly.get("Name"), "sha:", ly.get("SHA1Digest", "")[:10])
+                  if e.get("AssetType") == "IconImageStack":
+                      bg = e["Layers"][0]
+                      print("STACK", e.get("Appearance"), "bg:", bg.get("Name"), "sha:", bg.get("SHA1Digest", "")[:10], "comps:", bg.get("Color components"))
           PYEOF
