@@ -139,37 +139,44 @@ fn set_autostart_state(_app: tauri::AppHandle, enabled: bool) -> Result<(), Stri
 /// window keeps looking square. Clipping the NSWindow content view's layer
 /// rounds every layer at once. No-op elsewhere (radius 0 restores square,
 /// used while maximized, like native windows).
+///
+/// Commands run on a Tauri worker thread, but AppKit must run on the main
+/// thread (same lesson as the v2.0.16 Apple Silicon crash), so the native
+/// calls are dispatched with run_on_main_thread.
 #[tauri::command]
-fn set_window_corner_radius(window: tauri::WebviewWindow, radius: f64) -> Result<(), String> {
+fn set_window_corner_radius(app: tauri::AppHandle, window: tauri::WebviewWindow, radius: f64) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        window
-            .with_webview(move |webview| {
-                use objc2::msg_send;
-                use objc2::runtime::AnyObject;
-                unsafe {
-                    let ns_window = webview.ns_window() as *mut AnyObject;
-                    if ns_window.is_null() {
-                        return;
+        app.run_on_main_thread(move || {
+            let _ = window
+                .with_webview(move |webview| {
+                    use objc2::msg_send;
+                    use objc2::runtime::AnyObject;
+                    unsafe {
+                        let ns_window = webview.ns_window() as *mut AnyObject;
+                        if ns_window.is_null() {
+                            return;
+                        }
+                        let content_view: *mut AnyObject = msg_send![ns_window, contentView];
+                        if content_view.is_null() {
+                            return;
+                        }
+                        let _: () = msg_send![content_view, setWantsLayer: true];
+                        let layer: *mut AnyObject = msg_send![content_view, layer];
+                        if layer.is_null() {
+                            return;
+                        }
+                        let _: () = msg_send![layer, setCornerRadius: radius];
+                        let _: () = msg_send![layer, setMasksToBounds: true];
                     }
-                    let content_view: *mut AnyObject = msg_send![ns_window, contentView];
-                    if content_view.is_null() {
-                        return;
-                    }
-                    let _: () = msg_send![content_view, setWantsLayer: true];
-                    let layer: *mut AnyObject = msg_send![content_view, layer];
-                    if layer.is_null() {
-                        return;
-                    }
-                    let _: () = msg_send![layer, setCornerRadius: radius];
-                    let _: () = msg_send![layer, setMasksToBounds: true];
-                }
-            })
-            .map_err(|error| error.to_string())?;
+                })
+                .map_err(|error| error.to_string());
+        })
+        .map_err(|error| error.to_string())?;
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (window, radius);
+        let _ = (app, window, radius);
     }
     Ok(())
 }
