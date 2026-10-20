@@ -13,16 +13,13 @@ jobs:
           LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
-      - name: ictool render attempts
+      - name: ictool argument recon
         run: |
-          set +e
           ICTOOL="$(xcode-select -p)/usr/bin/ictool"
-          "$ICTOOL" --help 2>&1 | head -60
-          echo "===== try renders ====="
-          mkdir -p /tmp/previews
-          "$ICTOOL" src-tauri/AppIcon.icon --out /tmp/previews --size 512 2>&1 | head -10
-          ls -la /tmp/previews
-          find /tmp/previews -type f | head -20
+          echo "== dash args =="
+          strings "$ICTOOL" | grep -E "^--[a-z-]+$" | sort -u | head -60
+          echo "== keyword strings =="
+          strings "$ICTOOL" | grep -iE "rendition|appearance|output|usage" | sort -u | head -40
       - name: Upload previews
         if: always()
         uses: actions/upload-artifact@v4
