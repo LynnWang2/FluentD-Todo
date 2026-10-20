@@ -14,25 +14,30 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Recon - locate Icon Composer and sample .icon files
+      - name: Recon 2 - Icon Composer app, deeper search
         run: |
-          echo "== developer dir =="
-          xcode-select -p
-          echo "== apps bundled with Xcode =="
-          ls "$(xcode-select -p)/../../Applications" 2>/dev/null || true
-          ls /Applications | grep -i -E "icon|xcode" || true
-          echo "== sample .icon bundles under Xcode (bounded depth) =="
-          find "$(xcode-select -p)/../.." -maxdepth 5 -name "*.icon" 2>/dev/null | head -20 || true
-          echo "== icon.json files (bounded) =="
-          find "$(xcode-select -p)/../.." -maxdepth 6 -name "icon.json" 2>/dev/null | head -5 || true
-      - name: Dump first sample icon.json and its layout
+          XC=/Applications/Xcode_26.6.0.app
+          echo "== Contents/Applications =="
+          ls "$XC/Contents/Applications" || true
+          echo "== find composer (bounded) =="
+          find "$XC/Contents" -maxdepth 3 -iname "*composer*" 2>/dev/null | head || true
+          echo "== .icon bundles inside Icon Composer (deep) =="
+          find "$XC/Contents/Applications" -name "*.icon" 2>/dev/null | head -10 || true
+          echo "== icon.json anywhere in Xcode apps dir (deep) =="
+          find "$XC/Contents/Applications" -name "icon.json" 2>/dev/null | head -5 || true
+          echo "== icon-related tools =="
+          ls "$(xcode-select -p)/usr/bin" | grep -i icon || true
+          find "$(xcode-select -p)/usr/bin" -iname "*icon*" 2>/dev/null | head || true
+          echo "== actool help (icon mentions) =="
+          xcrun actool --help 2>&1 | grep -i -A2 -B2 "icon" | head -60 || true
+      - name: Dump sample icon.json (deep find)
         run: |
-          SAMPLE=$(find "$(xcode-select -p)/../.." -maxdepth 6 -name "icon.json" 2>/dev/null | head -1)
+          SAMPLE=$(find /Applications/Xcode_26.6.0.app/Contents/Applications -name "icon.json" 2>/dev/null | head -1)
           echo "sample: $SAMPLE"
           if [ -n "$SAMPLE" ]; then
             cat "$SAMPLE"
             echo "== bundle layout =="
-            find "$(dirname "$SAMPLE")" -type f | head -30
+            find "$(dirname "$SAMPLE")" -type f | head -40
           fi
       - name: Baseline A - current appiconset, deployment 11
         run: |
