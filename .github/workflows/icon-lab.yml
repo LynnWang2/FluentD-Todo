@@ -1,0 +1,50 @@
+name: icon-lab
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lab:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select newest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
+          xcodebuild -version
+          xcrun actool --version | head -3
+      - name: Recon - locate Icon Composer and sample .icon files
+        run: |
+          echo "== developer dir =="
+          xcode-select -p
+          echo "== apps bundled with Xcode =="
+          ls "$(xcode-select -p)/../../Applications" 2>/dev/null || true
+          ls /Applications | grep -i -E "icon|xcode" || true
+          echo "== sample .icon bundles under Xcode (bounded depth) =="
+          find "$(xcode-select -p)/../.." -maxdepth 5 -name "*.icon" 2>/dev/null | head -20 || true
+          echo "== icon.json files (bounded) =="
+          find "$(xcode-select -p)/../.." -maxdepth 6 -name "icon.json" 2>/dev/null | head -5 || true
+      - name: Dump first sample icon.json and its layout
+        run: |
+          SAMPLE=$(find "$(xcode-select -p)/../.." -maxdepth 6 -name "icon.json" 2>/dev/null | head -1)
+          echo "sample: $SAMPLE"
+          if [ -n "$SAMPLE" ]; then
+            cat "$SAMPLE"
+            echo "== bundle layout =="
+            find "$(dirname "$SAMPLE")" -type f | head -30
+          fi
+      - name: Baseline A - current appiconset, deployment 11
+        run: |
+          rm -rf /tmp/expA && mkdir -p /tmp/expA
+          xcrun actool src-tauri/AppIcon.xcassets --compile /tmp/expA --app-icon AppIcon --include-all-app-icons --target-device mac --platform macosx --minimum-deployment-target 11.0 --output-partial-info-plist /tmp/expA.plist || true
+          echo "dark strings in A:"
+          strings /tmp/expA/Assets.car 2>/dev/null | grep -ci dark || true
+      - name: Baseline B - current appiconset, deployment 26
+        run: |
+          rm -rf /tmp/expB && mkdir -p /tmp/expB
+          xcrun actool src-tauri/AppIcon.xcassets --compile /tmp/expB --app-icon AppIcon --include-all-app-icons --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist /tmp/expB.plist || true
+          echo "dark strings in B:"
+          strings /tmp/expB/Assets.car 2>/dev/null | grep -ci dark || true
+          echo "rendition names in B:"
+          strings /tmp/expB/Assets.car 2>/dev/null | grep -E "^icon-" | sort -u || true
