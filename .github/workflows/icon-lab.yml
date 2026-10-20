@@ -14,31 +14,29 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Recon 2 - Icon Composer app, deeper search
+      - name: Recon 3 - schema keys inside actool binaries
         run: |
-          XC=/Applications/Xcode_26.6.0.app
-          echo "== Contents/Applications =="
-          ls "$XC/Contents/Applications" || true
-          echo "== find composer (bounded) =="
-          find "$XC/Contents" -maxdepth 3 -iname "*composer*" 2>/dev/null | head || true
-          echo "== .icon bundles inside Icon Composer (deep) =="
-          find "$XC/Contents/Applications" -name "*.icon" 2>/dev/null | head -10 || true
-          echo "== icon.json anywhere in Xcode apps dir (deep) =="
-          find "$XC/Contents/Applications" -name "icon.json" 2>/dev/null | head -5 || true
-          echo "== icon-related tools =="
-          ls "$(xcode-select -p)/usr/bin" | grep -i icon || true
-          find "$(xcode-select -p)/usr/bin" -iname "*icon*" 2>/dev/null | head || true
-          echo "== actool help (icon mentions) =="
-          xcrun actool --help 2>&1 | grep -i -A2 -B2 "icon" | head -60 || true
-      - name: Dump sample icon.json (deep find)
-        run: |
-          SAMPLE=$(find /Applications/Xcode_26.6.0.app/Contents/Applications -name "icon.json" 2>/dev/null | head -1)
-          echo "sample: $SAMPLE"
-          if [ -n "$SAMPLE" ]; then
-            cat "$SAMPLE"
-            echo "== bundle layout =="
-            find "$(dirname "$SAMPLE")" -type f | head -40
+          echo "== actool real path =="
+          xcrun -f actool || true
+          echo "== candidate binaries =="
+          ls "$(xcode-select -p)/usr/bin" | grep -i -E "actool|ibtool|icon" || true
+          echo "== strings: specialization / appearance keys =="
+          for B in "$(xcrun -f actool)" "$(xcode-select -p)/usr/bin/ibtoold"; do
+            echo "-- $B"
+            strings "$B" 2>/dev/null | grep -i "specialization" | sort -u | head -20 || true
+          done
+          echo "== strings: icon.json top-level keys (framework) =="
+          FW=$(find "$(xcode-select -p)/.." -name "AssetCatalogFoundation.framework" -maxdepth 6 2>/dev/null | head -1)
+          echo "framework: $FW"
+          if [ -n "$FW" ]; then
+            BIN=$(find "$FW" -type f -perm -111 | head -1)
+            echo "binary: $BIN"
+            strings "$BIN" 2>/dev/null | grep -E "^(fill|groups|layers|supported-platforms|version|image-name|translucency|shadow|blend-mode|lighting|background)" | sort -u | head -40 || true
+            echo "-- appearance values --"
+            strings "$BIN" 2>/dev/null | grep -iE "^(dark|light|mono|tinted)$" | sort -u || true
           fi
+          echo "== Icon Composer resources =="
+          find "/Applications/Xcode_26.6.0.app/Contents/Applications/Icon Composer.app" -maxdepth 4 -type d | head -25 || true
       - name: Baseline A - current appiconset, deployment 11
         run: |
           rm -rf /tmp/expA && mkdir -p /tmp/expA
