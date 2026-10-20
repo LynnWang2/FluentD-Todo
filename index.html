@@ -1528,6 +1528,38 @@
     margin-top: 16px;
   }
 
+  /* Drag & drop reordering */
+  .drag-placeholder {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-card);
+    background: rgba(var(--card-rgb), 0.35);
+    flex: none;
+  }
+
+  .drag-source {
+    display: none !important;
+  }
+
+  .drag-clone {
+    position: fixed;
+    z-index: 500;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0.97;
+  }
+
+  .drag-clone .task-card {
+    box-shadow: var(--shadow-window);
+  }
+
+  body.dragging,
+  body.dragging * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
   /* ============ Motion ============
      Fluent-style micro-animations: only opacity/transform animate, 150-320ms,
      one decelerating curve everywhere. */
@@ -2129,12 +2161,12 @@ let justToggledLineIndex = null; // the just-checked card draws its checkmark
 // every surviving card from its old spot to its new one.
 function flipCards(mutate) {
   const before = new Map();
-  document.querySelectorAll(".task-card").forEach(el => {
+  taskListContainer.querySelectorAll(".task-card").forEach(el => {
     if (el.dataset.lineIndex != null) before.set(el.dataset.lineIndex, el.getBoundingClientRect().top);
   });
   mutate();
   if (!before.size) return;
-  document.querySelectorAll(".task-card").forEach(el => {
+  taskListContainer.querySelectorAll(".task-card").forEach(el => {
     const key = el.dataset.lineIndex;
     if (key == null || !before.has(key)) return;
     const dy = before.get(key) - el.getBoundingClientRect().top;
@@ -3100,6 +3132,187 @@ function openMoveTaskDialog(lineIndex) {
 }
 
 document.getElementById("btnAddSection").addEventListener("click", openSectionDialog);
+
+// ---------- Drag & drop reordering ----------
+// Press-and-hold (180ms) or a deliberate 10px move picks the card up: a
+// floating copy follows the pointer, a dashed placeholder marks the drop
+// slot and slides between cards AND sections (siblings FLIP out of the
+// way). Dropping rewrites the .md lines; a parent task carries its whole
+// subtask block along.
+function taskBlockRange(parsed, lineIndex) {
+  const t = parsed.tasks.find(x => x.lineIndex === lineIndex);
+  if (!t) return [lineIndex, lineIndex];
+  const depthOf = x => (x.indent ? x.indent.length : 0);
+  let end = lineIndex;
+  const after = parsed.tasks.filter(x => x.lineIndex > lineIndex).sort((a, b) => a.lineIndex - b.lineIndex);
+  for (const x of after) {
+    if (parsed.sections.some(s => s.lineIndex > lineIndex && s.lineIndex < x.lineIndex)) break;
+    if (depthOf(x) > depthOf(t)) end = x.lineIndex; else break;
+  }
+  return [lineIndex, end];
+}
+
+let dragArm = null;
+let dragCtx = null;
+let suppressClickUntil = 0;
+
+taskListContainer.addEventListener("pointerdown", e => {
+  if (e.button !== 0 || dragCtx) return;
+  const card = e.target.closest(".task-card");
+  if (!card || card.dataset.lineIndex == null) return;
+  if (e.target.closest(".fluent-checkbox, .task-actions, button, input, textarea, select, a")) return;
+  if (card.querySelector(".task-edit-input")) return;
+  dragArm = { lineIndex: Number(card.dataset.lineIndex), startX: e.clientX, startY: e.clientY, held: false };
+  const arm = dragArm;
+  setTimeout(() => { if (dragArm === arm) arm.held = true; }, 180);
+});
+
+window.addEventListener("pointermove", e => {
+  if (dragCtx) { moveDrag(e); return; }
+  if (!dragArm) return;
+  const dist = Math.hypot(e.clientX - dragArm.startX, e.clientY - dragArm.startY);
+  if (dragArm.held || dist > 10) startDrag(e);
+});
+
+window.addEventListener("pointerup", () => {
+  if (dragCtx) finishDrag();
+  dragArm = null;
+});
+window.addEventListener("pointercancel", () => {
+  if (dragCtx) cancelDrag();
+  dragArm = null;
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && dragCtx) { cancelDrag(); dragArm = null; }
+});
+
+// Swallow the click that follows a drag so it doesn't open the editor.
+taskListContainer.addEventListener("click", e => {
+  if (Date.now() < suppressClickUntil) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+
+function startDrag(e) {
+  const parsed = parseMarkdown(rawContent);
+  const [start, end] = taskBlockRange(parsed, dragArm.lineIndex);
+  const blockCards = [...taskListContainer.querySelectorAll(".task-card")]
+    .filter(c => { const li = Number(c.dataset.lineIndex); return li >= start && li <= end; });
+  if (!blockCards.length) { dragArm = null; return; }
+  const first = blockCards[0];
+  const rect = first.getBoundingClientRect();
+  const placeholder = document.createElement("div");
+  placeholder.className = "drag-placeholder";
+  placeholder.style.height = `${blockCards.reduce((h, c) => h + c.offsetHeight, 0) + 6 * (blockCards.length - 1)}px`;
+  if (first.style.marginLeft) placeholder.style.marginLeft = first.style.marginLeft;
+  first.parentNode.insertBefore(placeholder, first);
+  blockCards.forEach(c => c.classList.add("drag-source"));
+  const clone = document.createElement("div");
+  clone.className = "drag-clone";
+  blockCards.forEach(c => {
+    const n = c.cloneNode(true);
+    n.classList.remove("drag-source");
+    clone.appendChild(n);
+  });
+  clone.style.width = `${rect.width}px`;
+  clone.style.left = `${rect.left}px`;
+  clone.style.top = `${rect.top}px`;
+  document.body.appendChild(clone);
+  dragCtx = {
+    start, end, parsed, placeholder, clone, blockCards,
+    grabDX: dragArm.startX - rect.left,
+    grabDY: dragArm.startY - rect.top
+  };
+  document.body.classList.add("dragging");
+  moveDrag(e);
+}
+
+function moveDrag(e) {
+  const ctx = dragCtx;
+  if (!ctx) return;
+  ctx.clone.style.left = `${e.clientX - ctx.grabDX}px`;
+  ctx.clone.style.top = `${e.clientY - ctx.grabDY}px`;
+  const cRect = taskListContainer.getBoundingClientRect();
+  if (e.clientY < cRect.top + 56) taskListContainer.scrollTop -= 12;
+  else if (e.clientY > cRect.bottom - 56) taskListContainer.scrollTop += 12;
+  const els = [...taskListContainer.children].filter(el =>
+    (el.classList.contains("task-card") && !el.classList.contains("drag-source")) ||
+    el.classList.contains("section-group-header"));
+  let target = null;
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) { target = el; break; }
+  }
+  const ph = ctx.placeholder;
+  if (target) {
+    if (ph.nextElementSibling !== target || ph.parentNode !== taskListContainer) {
+      if (target.previousElementSibling !== ph) flipCards(() => taskListContainer.insertBefore(ph, target));
+    }
+  } else if (ph !== taskListContainer.lastElementChild) {
+    flipCards(() => taskListContainer.appendChild(ph));
+  }
+}
+
+function computeDropContent(ctx) {
+  const { parsed, start, end, placeholder } = ctx;
+  const lines = parsed.lines;
+  const block = lines.slice(start, end + 1);
+  const rest = lines.filter((_, i) => i < start || i > end);
+  const siblings = [...taskListContainer.children];
+  const phIdx = siblings.indexOf(placeholder);
+  const isAnchor = el => !el.classList.contains("drag-source") && !el.classList.contains("section-add-row");
+  let prevEl = null, nextCard = null;
+  for (let i = phIdx - 1; i >= 0; i--) if (isAnchor(siblings[i])) { prevEl = siblings[i]; break; }
+  for (let i = phIdx + 1; i < siblings.length; i++) {
+    if (!isAnchor(siblings[i])) continue;
+    if (siblings[i].classList.contains("task-card")) { nextCard = siblings[i]; break; }
+    if (siblings[i].classList.contains("section-group-header")) break;
+  }
+  const taskByLine = new Map(parsed.tasks.map(t => [t.lineIndex, t]));
+  let insertBefore;
+  if (prevEl && prevEl.classList.contains("section-group-header")) {
+    const secName = prevEl.dataset.sectionName;
+    const nextTask = nextCard ? taskByLine.get(Number(nextCard.dataset.lineIndex)) : null;
+    if (nextTask && nextTask.section === secName) {
+      insertBefore = nextTask.lineIndex;
+    } else {
+      const sec = parsed.sections.find(s => s.name === secName);
+      insertBefore = sec ? sec.lineIndex + 1 : (nextCard ? Number(nextCard.dataset.lineIndex) : lines.length);
+    }
+  } else if (nextCard) {
+    insertBefore = Number(nextCard.dataset.lineIndex);
+  } else if (prevEl && prevEl.classList.contains("task-card")) {
+    insertBefore = taskBlockRange(parsed, Number(prevEl.dataset.lineIndex))[1] + 1;
+  } else {
+    insertBefore = lines.length;
+  }
+  const removedBefore = insertBefore <= start ? 0 : insertBefore > end ? block.length : insertBefore - start;
+  const idx = insertBefore - removedBefore;
+  if (idx === start) return null;
+  rest.splice(idx, 0, ...block);
+  return rest.join("\n");
+}
+
+function cleanupDrag() {
+  if (!dragCtx) return;
+  dragCtx.clone.remove();
+  dragCtx.placeholder.remove();
+  dragCtx.blockCards.forEach(c => c.classList.remove("drag-source"));
+  document.body.classList.remove("dragging");
+  dragCtx = null;
+}
+
+function finishDrag() {
+  const ctx = dragCtx;
+  const newContent = computeDropContent(ctx);
+  cleanupDrag();
+  suppressClickUntil = Date.now() + 250;
+  if (newContent != null && newContent !== rawContent) saveToMarkdownFile(newContent, "已重新排序");
+  else renderApp();
+}
+
+function cancelDrag() {
+  cleanupDrag();
+  renderApp();
+}
 
 // ---------- Custom context menu (the webview menu is suppressed) ----------
 const contextMenu = document.getElementById("contextMenu");
