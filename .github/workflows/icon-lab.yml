@@ -14,29 +14,19 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Recon 3 - schema keys inside actool binaries
+      - name: Recon 4 - full JSON key inventory of IconComposer frameworks
         run: |
-          echo "== actool real path =="
-          xcrun -f actool || true
-          echo "== candidate binaries =="
-          ls "$(xcode-select -p)/usr/bin" | grep -i -E "actool|ibtool|icon" || true
-          echo "== strings: specialization / appearance keys =="
-          for B in "$(xcrun -f actool)" "$(xcode-select -p)/usr/bin/ibtoold"; do
-            echo "-- $B"
-            strings "$B" 2>/dev/null | grep -i "specialization" | sort -u | head -20 || true
+          IC="/Applications/Xcode_26.6.0.app/Contents/Applications/Icon Composer.app/Contents/Frameworks"
+          for FW in IconComposerFoundation IconRendering IconComposerKit; do
+            BIN=$(find "$IC/$FW.framework" -type f -perm -111 2>/dev/null | head -1)
+            echo "===== $FW -> $BIN"
+            if [ -n "$BIN" ]; then
+              echo "-- key-shaped tokens --"
+              strings "$BIN" | grep -E "^[a-z][a-z0-9-]{2,32}$" | sort -u | head -120
+              echo "-- special/appearance/platform hits --"
+              strings "$BIN" | grep -iE "special|appearance|platform|display-mode|color-scheme" | sort -u | head -40
+            fi
           done
-          echo "== strings: icon.json top-level keys (framework) =="
-          FW=$(find "$(xcode-select -p)/.." -name "AssetCatalogFoundation.framework" -maxdepth 6 2>/dev/null | head -1)
-          echo "framework: $FW"
-          if [ -n "$FW" ]; then
-            BIN=$(find "$FW" -type f -perm -111 | head -1)
-            echo "binary: $BIN"
-            strings "$BIN" 2>/dev/null | grep -E "^(fill|groups|layers|supported-platforms|version|image-name|translucency|shadow|blend-mode|lighting|background)" | sort -u | head -40 || true
-            echo "-- appearance values --"
-            strings "$BIN" 2>/dev/null | grep -iE "^(dark|light|mono|tinted)$" | sort -u || true
-          fi
-          echo "== Icon Composer resources =="
-          find "/Applications/Xcode_26.6.0.app/Contents/Applications/Icon Composer.app" -maxdepth 4 -type d | head -25 || true
       - name: Baseline A - current appiconset, deployment 11
         run: |
           rm -rf /tmp/expA && mkdir -p /tmp/expA
