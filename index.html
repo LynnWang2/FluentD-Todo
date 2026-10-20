@@ -198,12 +198,17 @@
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    background: linear-gradient(135deg, #0078d4, #3aa0f3);
+    background: linear-gradient(135deg, #82C2EF, #0084FF);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    box-shadow: 0 2px 6px rgba(0, 120, 212, 0.35);
+    box-shadow: 0 2px 6px rgba(0, 132, 255, 0.35);
+  }
+
+  [data-theme="dark"] .brand-icon {
+    background: linear-gradient(135deg, #273D4D, #020A11);
+    box-shadow: 0 2px 6px rgba(2, 10, 17, 0.5);
   }
 
   /* Sync status is just a dot (details stay in the tooltip) */
@@ -674,8 +679,9 @@
     width: 36px;
   }
 
-  /* While squeezed, the sidebar toggle is locked (clicking does nothing) */
-  .fluent-window.auto-narrow .sidebar-toggle {
+  /* While the sidebar is auto-locked (window under the sidebar threshold),
+     the toggle is dimmed: clicking does nothing */
+  .fluent-window.sidebar-locked .sidebar-toggle {
     opacity: 0.45;
   }
 
@@ -785,15 +791,16 @@
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 2px;
     position: relative;
   }
 
-  /* Section switcher: chevron after the view title, only while the sidebar is
-     collapsed; drops a list of 未分类 (when it has tasks) + all sections. */
+  /* Section switcher: chevron right after the view title (always visible,
+     sidebar expanded or collapsed); drops a list of 未分类 (when it has
+     tasks) + all sections. */
   .view-switch-btn {
-    display: none;
-    width: 24px;
+    display: inline-flex;
+    width: 18px;
     height: 24px;
     align-items: center;
     justify-content: center;
@@ -809,10 +816,6 @@
   .view-switch-btn:hover {
     background: rgba(var(--card-rgb), 0.65);
     color: var(--text-primary);
-  }
-
-  .fluent-window.sidebar-collapsed .view-switch-btn {
-    display: inline-flex;
   }
 
   .view-switch-btn svg {
@@ -1010,6 +1013,46 @@
     justify-content: space-between;
   }
 
+  /* Per-section quick-add row: same box metrics as a task card. The plus
+     occupies the checkbox slot (19px after the same 13px padding and 11px
+     gap), so it lines up with the checkboxes above, and the input text
+     starts exactly where task text starts. */
+  .section-add-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 13px;
+    border-radius: var(--radius-card);
+    background: rgba(var(--card-rgb), var(--card-alpha));
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-card);
+    cursor: text;
+  }
+  .add-row-plus {
+    width: 19px;
+    height: 19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .add-row-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 13.5px;
+    line-height: 1.4;
+    font-family: inherit;
+    padding: 0;
+  }
+  .add-row-input::placeholder {
+    color: var(--text-muted);
+  }
+
   .task-card {
     display: flex;
     align-items: center;
@@ -1133,10 +1176,9 @@
     font-size: 13.5px;
     font-family: inherit;
     line-height: 1.4;
-    padding: 3px 8px;
-    border-radius: var(--radius-control);
-    border: 1.5px solid var(--border-strong);
-    background: rgba(var(--card-rgb), 0.95);
+    padding: 0;
+    border: none;
+    background: transparent;
     color: var(--text-primary);
     outline: none;
     resize: none;
@@ -1250,10 +1292,15 @@
   .section-select {
     height: 38px;
     max-width: 145px;
-    padding: 0 10px;
+    padding: 0 30px 0 10px;
     border-radius: var(--radius-control);
     border: 1px solid var(--border-strong);
-    background: rgba(var(--card-rgb), 0.85);
+    background-color: rgba(var(--card-rgb), 0.85);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a919c' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    appearance: none;
+    -webkit-appearance: none;
     color: var(--text-primary);
     font-size: 12.5px;
     font-family: inherit;
@@ -1643,9 +1690,11 @@
         </button>
       </div>
       <div class="brand-icon">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 11 12 14 22 4"></polyline>
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+        <svg width="20" height="20" viewBox="0 0 90 90" fill="none" stroke="white" stroke-width="5.35719" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M36.0711 25.4603L25.9996 35.5318L21.0442 30.5764"/>
+          <path d="M51.0981 31.755H68"/>
+          <path d="M51.0981 59.9338H68"/>
+          <path d="M35.9372 58.9159C35.9372 63.0877 32.5554 66.4696 28.3836 66.4696C24.2118 66.4696 20.83 63.0877 20.83 58.9159C20.83 54.7442 24.2118 51.3623 28.3836 51.3623C32.5554 51.3623 35.9372 54.7442 35.9372 58.9159Z"/>
         </svg>
       </div>
       <span>Fluent MD Todo</span>
@@ -1676,7 +1725,7 @@
       </button>
       <div class="window-controls" aria-label="窗口控制">
         <button class="window-control" id="btnMinimize" title="最小化" aria-label="最小化">
-          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M2 9.5h8"/></svg>
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M2 6h8"/></svg>
         </button>
         <button class="window-control" id="btnMaximize" title="最大化 / 还原" aria-label="最大化或还原">
           <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><rect x="2.25" y="2.25" width="7.5" height="7.5"/></svg>
@@ -1771,7 +1820,7 @@
           <div class="pane-title">
             <span id="currentViewTitle">全部待办</span>
             <button class="view-switch-btn" id="btnViewSwitch" title="切换章节" aria-label="切换章节">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             <div class="view-switch-panel" id="viewSwitchPanel"></div>
           </div>
@@ -2072,6 +2121,7 @@ setInterval(pollExternalChanges, 500);
 // Entrance choreography flags, consumed by renderApp:
 let listEnterPending = true;    // stagger the next full-list render in
 let newCardLineIndex = null;    // a freshly added card animates in alone
+let pendingAddFocusSection = null; // after adding via a section row, refocus it
 let justToggledLineIndex = null; // the just-checked card draws its checkmark
 
 // FLIP: snapshot card tops, mutate (re-renders synchronously), then glide
@@ -2233,6 +2283,45 @@ function addNewTask() {
   newTaskInput.value = "";
 }
 
+// Quick-add row rendered at the bottom of every section group: click to
+// type, Enter inserts the task into that section.
+function createSectionAddRow(sectionName) {
+  const row = document.createElement("div");
+  row.className = "section-add-row";
+  row.dataset.sectionName = sectionName;
+  if (listEnterPending) row.classList.add("card-enter");
+
+  const plus = document.createElement("div");
+  plus.className = "add-row-plus";
+  plus.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+
+  const input = document.createElement("input");
+  input.className = "add-row-input";
+  input.type = "text";
+  input.placeholder = "添加新待办";
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      const text = input.value.trim();
+      if (!text) return;
+      pendingAddFocusSection = sectionName;
+      insertTaskLine(`- [ ] ${text}`, sectionName === "未分类" ? "__uncategorized__" : sectionName);
+    } else if (e.key === "Escape") {
+      input.value = "";
+      input.blur();
+    }
+  });
+
+  row.addEventListener("click", () => input.focus());
+  row.appendChild(plus);
+  row.appendChild(input);
+
+  if (pendingAddFocusSection === sectionName) {
+    pendingAddFocusSection = null;
+    setTimeout(() => input.focus(), 10);
+  }
+  return row;
+}
+
 // Render UI
 function renderApp() {
   const { sections, tasks } = parseMarkdown(rawContent);
@@ -2318,7 +2407,44 @@ function renderApp() {
 
   // Render Task Cards grouped by Section
   taskListContainer.innerHTML = "";
-  if (filteredTasks.length === 0) {
+
+  // Completed tasks sink to the end of their section; order inside each
+  // group (active / completed) stays in document order (stable sort), and
+  // sections keep their document order.
+  const sectionOrder = new Map();
+  filteredTasks.forEach(t => { if (!sectionOrder.has(t.section)) sectionOrder.set(t.section, sectionOrder.size); });
+  const displayTasks = filteredTasks.slice().sort((a, b) =>
+    (sectionOrder.get(a.section) - sectionOrder.get(b.section)) ||
+    ((a.completed ? 1 : 0) - (b.completed ? 1 : 0)));
+
+  // Group the display tasks by section. In the "all" view every section of
+  // the document gets a group — even an empty one — so each category shows
+  // its own quick-add row; a single-section view always gets its one group.
+  const isSectionView = currentFilter.startsWith("section:");
+  const showAddRows = currentFilter !== "completed" && !searchQuery;
+  const groups = [];
+  {
+    const bySection = new Map();
+    displayTasks.forEach(t => {
+      if (!bySection.has(t.section)) bySection.set(t.section, []);
+      bySection.get(t.section).push(t);
+    });
+    if (isSectionView) {
+      const viewName = currentFilter.slice(8);
+      groups.push({ name: viewName, tasks: bySection.get(viewName) || [] });
+    } else if (currentFilter === "all" && !searchQuery) {
+      if ((bySection.get("未分类") || []).length > 0 || sections.length === 0) {
+        groups.push({ name: "未分类", tasks: bySection.get("未分类") || [] });
+      }
+      sections.forEach(sec => groups.push({ name: sec.name, tasks: bySection.get(sec.name) || [] }));
+    } else {
+      const seen = [];
+      displayTasks.forEach(t => { if (!seen.includes(t.section)) seen.push(t.section); });
+      seen.forEach(name => groups.push({ name, tasks: bySection.get(name) }));
+    }
+  }
+
+  if (groups.length === 0) {
     taskListContainer.innerHTML = `
       <div class="empty-state">
         <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -2333,26 +2459,17 @@ function renderApp() {
     return;
   }
 
-  // Completed tasks sink to the end of their section; order inside each
-  // group (active / completed) stays in document order (stable sort), and
-  // sections keep their document order.
-  const sectionOrder = new Map();
-  filteredTasks.forEach(t => { if (!sectionOrder.has(t.section)) sectionOrder.set(t.section, sectionOrder.size); });
-  const displayTasks = filteredTasks.slice().sort((a, b) =>
-    (sectionOrder.get(a.section) - sectionOrder.get(b.section)) ||
-    ((a.completed ? 1 : 0) - (b.completed ? 1 : 0)));
-
-  let lastRenderedSection = null;
-  displayTasks.forEach((task, displayIdx) => {
-    if (task.section !== lastRenderedSection && !currentFilter.startsWith("section:")) {
-      lastRenderedSection = task.section;
+  let displayIdx = 0;
+  groups.forEach(group => {
+    if (!isSectionView) {
       const headerEl = document.createElement("div");
       headerEl.className = "section-group-header";
-      headerEl.dataset.sectionName = task.section;
+      headerEl.dataset.sectionName = group.name;
       if (listEnterPending) headerEl.classList.add("card-enter");
-      headerEl.innerHTML = `<span># ${escapeHtml(task.section)}</span>`;
+      headerEl.innerHTML = `<span># ${escapeHtml(group.name)}</span>`;
       taskListContainer.appendChild(headerEl);
     }
+    group.tasks.forEach(task => {
 
     const card = document.createElement("div");
     card.className = `task-card ${task.completed ? "completed" : ""} ${task.isSubtask ? "subtask" : ""}`;
@@ -2462,6 +2579,9 @@ function renderApp() {
     card.appendChild(body);
     card.appendChild(actions);
     taskListContainer.appendChild(card);
+    displayIdx++;
+    });
+    if (showAddRows) taskListContainer.appendChild(createSectionAddRow(group.name));
   });
   listEnterPending = false;
   newCardLineIndex = null;
@@ -2775,32 +2895,37 @@ function setSidebarCollapsed(collapsed) {
   btnSidebarToggle.classList.toggle("active", !collapsed);
 }
 btnSidebarToggle.addEventListener("click", () => {
-  // In the squeezed (auto-narrow) layout there is no room for the sidebar:
-  // the toggle stays locked until the window is wide enough again.
-  if (appWindow.classList.contains("auto-narrow")) return;
+  // Under the sidebar threshold there is no room for the sidebar: the
+  // toggle stays locked until the window is wide enough again.
+  if (window.innerWidth < SIDEBAR_NARROW_THRESHOLD) return;
   sidebarAutoCollapsed = false; // a manual toggle overrides the auto memory
   setSidebarCollapsed(!appWindow.classList.contains("sidebar-collapsed"));
 });
 
-// Responsive squeeze: labels never wrap (CSS nowrap); when the window gets
-// narrower than the threshold, titlebar labels hide and the sidebar
-// auto-collapses. Widening restores the labels — and the sidebar too, but
-// only when it was the narrowing that hid it (a manual collapse stays).
-const NARROW_THRESHOLD = 740;
-let wasNarrow = false;
+// Responsive squeeze, two thresholds: titlebar labels never wrap (CSS
+// nowrap) — when the window gets narrower than TITLEBAR_NARROW_THRESHOLD
+// the labels hide (auto-narrow). The sidebar holds on longer and only
+// auto-collapses under the smaller SIDEBAR_NARROW_THRESHOLD. Widening
+// restores the labels — and the sidebar too, but only when it was the
+// narrowing that hid it (a manual collapse stays).
+const TITLEBAR_NARROW_THRESHOLD = 680;
+const SIDEBAR_NARROW_THRESHOLD = 620;
+let wasSidebarNarrow = false;
 let sidebarAutoCollapsed = false;
 function applyResponsiveLayout() {
-  const narrow = window.innerWidth < NARROW_THRESHOLD;
-  appWindow.classList.toggle("auto-narrow", narrow);
-  if (narrow && !wasNarrow && !appWindow.classList.contains("sidebar-collapsed")) {
+  const w = window.innerWidth;
+  appWindow.classList.toggle("auto-narrow", w < TITLEBAR_NARROW_THRESHOLD);
+  const sbNarrow = w < SIDEBAR_NARROW_THRESHOLD;
+  appWindow.classList.toggle("sidebar-locked", sbNarrow);
+  if (sbNarrow && !wasSidebarNarrow && !appWindow.classList.contains("sidebar-collapsed")) {
     setSidebarCollapsed(true);
     sidebarAutoCollapsed = true;
   }
-  if (!narrow && wasNarrow && sidebarAutoCollapsed) {
+  if (!sbNarrow && wasSidebarNarrow && sidebarAutoCollapsed) {
     setSidebarCollapsed(false);
     sidebarAutoCollapsed = false;
   }
-  wasNarrow = narrow;
+  wasSidebarNarrow = sbNarrow;
 }
 window.addEventListener("resize", applyResponsiveLayout);
 applyResponsiveLayout();
