@@ -32,13 +32,15 @@ jobs:
           toolchain: 1.90.0
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - run: pnpm install --frozen-lockfile
-      - name: Compile macOS icon appearance variants (Assets.car)
+      - name: Compile macOS icon (Icon Composer .icon -> Assets.car)
         if: matrix.platform == 'macos-latest'
         run: |
-          # Dark-appearance app icons for the mac idiom need Xcode 26's
-          # actool; an older actool silently drops the dark renditions
-          # (shipped v1.3.0/v1.3.1 Assets.car contained light icons only).
-          # Pick the newest Xcode installed on the runner.
+          # macOS dark-mode app icons are authored as an Icon Composer
+          # .icon bundle (src-tauri/AppIcon.icon): actool compiles it to
+          # Assets.car with per-appearance icon stacks. The old
+          # appiconset route silently dropped every dark rendition for
+          # the mac idiom (shipped broken in v1.3.0/v1.3.1) - do not go
+          # back to it. Requires Xcode 26's actool; pick the newest one.
           LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$LATEST_XCODE" ]; then
             echo "Selecting $LATEST_XCODE"
@@ -46,25 +48,48 @@ jobs:
           fi
           xcodebuild -version
           xcrun actool --version
-          xcrun actool src-tauri/AppIcon.xcassets \
+          xcrun actool src-tauri/AppIcon.icon \
             --compile src-tauri \
             --app-icon AppIcon \
-            --include-all-app-icons \
             --target-device mac \
             --platform macosx \
-            --minimum-deployment-target 11.0 \
+            --minimum-deployment-target 26.0 \
             --output-partial-info-plist /tmp/appicon-partial.plist
           test -f src-tauri/Assets.car
-          # Diagnostic only (do NOT fail the build): even Xcode 26.6's
-          # actool drops appiconset luminosity variants for the mac idiom —
-          # macOS dark icons are authored via Icon Composer (.icon) now.
-          # The dump stays in the log until that migration lands.
-          xcrun assetutil --info src-tauri/Assets.car > /tmp/car-info.txt || true
-          if grep -qi "dark" /tmp/car-info.txt; then
-            echo "Assets.car: dark renditions present"
-          else
-            echo "::warning::Assets.car has no dark-appearance renditions (known: appiconset route unsupported for mac icons)"
-          fi
+          # Hard verification: the compiled car must contain a DarkAqua
+          # stack whose gradient uses the dark artwork's colors
+          # (#273D4D -> #020A11) and a distinct Aqua stack. Fail loudly
+          # instead of shipping a light-only icon a third time.
+          xcrun assetutil --info src-tauri/Assets.car > /tmp/car-info.json
+          python3 - <<'PYEOF'
+          import json, sys
+          data = json.load(open("/tmp/car-info.json"))
+          stacks = {}
+          colors = []
+          for e in data:
+              if "Color components" in e and len(e["Color components"]) == 4:
+                  colors.append(tuple(round(c, 3) for c in e["Color components"]))
+              if e.get("AssetType") == "IconImageStack":
+                  stacks[e.get("Appearance")] = e["Layers"][0].get("SHA1Digest")
+          def has_color(target):
+              return any(all(abs(a - b) < 0.01 for a, b in zip(c, target)) for c in colors)
+          ok = True
+          if "NSAppearanceNameDarkAqua" not in stacks:
+              print("FAIL: no DarkAqua icon stack"); ok = False
+          if "NSAppearanceNameAqua" not in stacks:
+              print("FAIL: no Aqua icon stack"); ok = False
+          if ok and stacks["NSAppearanceNameDarkAqua"] == stacks["NSAppearanceNameAqua"]:
+              print("FAIL: dark and light stacks share the same background"); ok = False
+          if not has_color((0.153, 0.239, 0.302, 1)):
+              print("FAIL: dark gradient stop #273D4D missing"); ok = False
+          if not has_color((0.008, 0.039, 0.067, 1)):
+              print("FAIL: dark gradient stop #020A11 missing"); ok = False
+          if not has_color((0.51, 0.761, 0.937, 1)):
+              print("FAIL: light gradient stop #82C2EF missing"); ok = False
+          print("icon stacks:", stacks)
+          print("icon colors verified" if ok else "icon verification FAILED")
+          sys.exit(0 if ok else 1)
+          PYEOF
       - name: Wire Assets.car into the bundle config (macOS only)
         if: matrix.platform == 'macos-latest'
         run: |
