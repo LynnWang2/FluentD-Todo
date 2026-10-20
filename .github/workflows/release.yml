@@ -35,6 +35,17 @@ jobs:
       - name: Compile macOS icon appearance variants (Assets.car)
         if: matrix.platform == 'macos-latest'
         run: |
+          # Dark-appearance app icons for the mac idiom need Xcode 26's
+          # actool; an older actool silently drops the dark renditions
+          # (shipped v1.3.0/v1.3.1 Assets.car contained light icons only).
+          # Pick the newest Xcode installed on the runner.
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST_XCODE" ]; then
+            echo "Selecting $LATEST_XCODE"
+            sudo xcode-select -s "$LATEST_XCODE"
+          fi
+          xcodebuild -version
+          xcrun actool --version
           xcrun actool src-tauri/AppIcon.xcassets \
             --compile src-tauri \
             --app-icon AppIcon \
@@ -44,6 +55,13 @@ jobs:
             --minimum-deployment-target 11.0 \
             --output-partial-info-plist /tmp/appicon-partial.plist
           test -f src-tauri/Assets.car
+          # Fail loudly if the dark renditions were dropped again.
+          xcrun assetutil --info src-tauri/Assets.car > /tmp/car-info.txt
+          if ! grep -qi "dark" /tmp/car-info.txt; then
+            echo "::error::Assets.car has no dark-appearance renditions (actool too old?)"
+            exit 1
+          fi
+          echo "Assets.car verified: dark renditions present"
       - name: Wire Assets.car into the bundle config (macOS only)
         if: matrix.platform == 'macos-latest'
         run: |
