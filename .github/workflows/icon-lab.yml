@@ -14,32 +14,24 @@ jobs:
           if [ -n "$LATEST_XCODE" ]; then sudo xcode-select -s "$LATEST_XCODE"; fi
           xcodebuild -version
           xcrun actool --version | head -3
-      - name: Build REAL AppIcon.icon + render previews
+      - name: ictool render attempts
         run: |
           set +e
-          rm -rf /tmp/out-real && mkdir -p /tmp/out-real
-          xcrun actool src-tauri/AppIcon.icon --compile /tmp/out-real --app-icon AppIcon --target-device mac --platform macosx --minimum-deployment-target 26.0 --output-partial-info-plist /tmp/out-real.plist
-          echo "actool exit: $?"
-          ls -la /tmp/out-real
-          assetutil --info /tmp/out-real/Assets.car > /tmp/info-real.json 2>/dev/null
-          python3 - <<'PYEOF'
-          import json
-          data = json.load(open("/tmp/info-real.json"))
-          print("entries:", len(data))
-          for e in data:
-              if "Color components" in e:
-                  print("COLOR:", e.get("Name"), [round(c, 3) for c in e.get("Color components")])
-              if e.get("AssetType") == "IconImageStack":
-                  bg = e["Layers"][0]
-                  print("STACK", e.get("Appearance"), "bg:", bg.get("Name"), "comps:", bg.get("Color components"), "grad-colors:", bg.get("Gradient Colors"))
-              if e.get("AssetType") == "IconGroup":
-                  ly = e["Layers"][0]
-                  print("GROUP", e.get("Appearance"), "layer:", ly.get("Name"), "size:", ly.get("LayerSize"), "sha:", ly.get("SHA1Digest", "")[:10])
-          PYEOF
-          echo "== ictool hunt =="
-          find "/Applications/Xcode_26.6.0.app/Contents/Applications/Icon Composer.app" -name "ictool*" 2>/dev/null
-          find "$(xcode-select -p)" -name "ictool*" 2>/dev/null | head -3
+          ICTOOL="$(xcode-select -p)/usr/bin/ictool"
+          "$ICTOOL" --help 2>&1 | head -60
+          echo "===== try renders ====="
+          mkdir -p /tmp/previews
+          "$ICTOOL" src-tauri/AppIcon.icon --out /tmp/previews --size 512 2>&1 | head -10
+          ls -la /tmp/previews
+          find /tmp/previews -type f | head -20
       - name: Upload previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: icon-previews
+          path: /tmp/previews
+          if-no-files-found: ignore
+
         if: always()
         uses: actions/upload-artifact@v4
         with:
