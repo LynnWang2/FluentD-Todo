@@ -35,6 +35,109 @@ fn load_remembered_path(app: &tauri::AppHandle) -> Result<Option<std::path::Path
     }
 }
 
+/// Remembered UI state (window geometry + opacity + theme mode), stored as
+/// JSON next to the remembered-file record so the app reopens the way the
+/// user left it. Geometry is captured by Rust itself on window events;
+/// opacity/theme are reported by the frontend through save_ui_prefs.
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
+struct UiState {
+    x: Option<i32>,
+    y: Option<i32>,
+    width: Option<u32>,
+    height: Option<u32>,
+    opacity: Option<f64>,
+    theme: Option<String>,
+    hide_completed: Option<bool>,
+}
+
+fn ui_state_file(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    let mut data_dir = app.path().app_local_data_dir().map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
+    data_dir.push("ui-state.json");
+    Ok(data_dir)
+}
+
+fn load_ui_state(app: &tauri::AppHandle) -> UiState {
+    let Ok(file) = ui_state_file(app) else { return UiState::default() };
+    let Ok(text) = std::fs::read_to_string(file) else { return UiState::default() };
+    serde_json::from_str(&text).unwrap_or_default()
+}
+
+fn store_ui_state(app: &tauri::AppHandle, state: &UiState) -> Result<(), String> {
+    let text = serde_json::to_string(state).map_err(|error| error.to_string())?;
+    std::fs::write(ui_state_file(app)?, text).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_ui_state(app: tauri::AppHandle) -> Result<UiState, String> {
+    Ok(load_ui_state(&app))
+}
+
+#[tauri::command]
+fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<String>, hide_completed: Option<bool>) -> Result<(), String> {
+    let mut state = load_ui_state(&app);
+    if opacity.is_some() {
+        state.opacity = opacity;
+    }
+    if theme.is_some() {
+        state.theme = theme;
+    }
+    if hide_completed.is_some() {
+        state.hide_completed = hide_completed;
+    }
+    store_ui_state(&app, &state)
+}
+
+static LAST_GEOMETRY_SAVE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// Snapshot the main window's position/size into the UI state. Move/resize
+/// events fire continuously while dragging, so those are throttled; exits
+/// pass force=true to always land the final resting place. Maximized and
+/// minimized states are skipped so a later restore never resurrects them.
+fn capture_window_geometry(window: &tauri::Window, force: bool) {
+    use tauri::Manager;
+    if !force {
+        let Ok(mut last) = LAST_GEOMETRY_SAVE.lock() else { return };
+        if let Some(saved_at) = *last {
+            if saved_at.elapsed() < std::time::Duration::from_millis(400) {
+                return;
+            }
+        }
+        *last = Some(std::time::Instant::now());
+    }
+    if window.is_maximized().unwrap_or(false) || window.is_minimized().unwrap_or(false) {
+        return;
+    }
+    let Ok(size) = window.outer_size() else { return };
+    let Ok(position) = window.outer_position() else { return };
+    if size.width < 200 || size.height < 200 || position.x < -10000 || position.y < -10000 {
+        return;
+    }
+    let app = window.app_handle();
+    let mut state = load_ui_state(app);
+    state.x = Some(position.x);
+    state.y = Some(position.y);
+    state.width = Some(size.width);
+    state.height = Some(size.height);
+    let _ = store_ui_state(app, &state);
+}
+
+/// True when the saved window rect intersects at least one connected
+/// monitor (guards against restoring onto a since-unplugged display).
+fn rect_on_screen(window: &tauri::WebviewWindow, x: i32, y: i32, width: u32, height: u32) -> bool {
+    let Ok(monitors) = window.available_monitors() else { return true };
+    if monitors.is_empty() {
+        return true;
+    }
+    monitors.iter().any(|monitor| {
+        let origin = monitor.position();
+        let size = monitor.size();
+        let (right, bottom) = (origin.x + size.width as i32, origin.y + size.height as i32);
+        x < right && x + width as i32 > origin.x && y < bottom && y + height as i32 > origin.y
+    })
+}
+
 #[tauri::command]
 fn remember_md_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let md_path = std::path::PathBuf::from(&path);
@@ -360,13 +463,22 @@ pub fn run() {
     ));
     let app = builder
         .on_window_event(|window, event| {
-            // Closing the window hides it to the tray instead of quitting;
-            // the app exits only from the tray menu （退出） or Cmd+Q.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if !QUITTING.load(std::sync::atomic::Ordering::Relaxed) {
-                    api.prevent_close();
-                    let _ = window.hide();
+            match event {
+                // Remember where the user left the window (throttled while
+                // dragging; the final position is forced on close/exit).
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    capture_window_geometry(window, false);
                 }
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    capture_window_geometry(window, true);
+                    // Closing the window hides it to the tray instead of quitting;
+                    // the app exits only from the tray menu （退出） or Cmd+Q.
+                    if !QUITTING.load(std::sync::atomic::Ordering::Relaxed) {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+                _ => {}
             }
         })
         .setup(|app| {
@@ -375,6 +487,17 @@ pub fn run() {
                 use tauri::Manager;
                 use tauri::window::EffectsBuilder;
                 if let Some(window) = app.get_webview_window("main") {
+                    // Restore the window geometry the user left last time
+                    // (position only when it still intersects a monitor).
+                    let saved = load_ui_state(app.handle());
+                    if let (Some(width), Some(height)) = (saved.width, saved.height) {
+                        let _ = window.set_size(tauri::PhysicalSize::new(width, height));
+                        if let (Some(x), Some(y)) = (saved.x, saved.y) {
+                            if rect_on_screen(&window, x, y, width, height) {
+                                let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                            }
+                        }
+                    }
                     #[cfg(target_os = "windows")]
                     let effects = EffectsBuilder::new().effect(tauri::window::Effect::Blur).build();
                     #[cfg(target_os = "macos")]
@@ -397,7 +520,9 @@ pub fn run() {
             write_md_file,
             get_autostart_state,
             set_autostart_state,
-            set_window_corner_radius
+            set_window_corner_radius,
+            get_ui_state,
+            save_ui_prefs
         ])
         .build(tauri::generate_context!())
         .expect("failed to run Fluent MD Todo");
@@ -405,6 +530,13 @@ pub fn run() {
     app.run(|app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = event {
             QUITTING.store(true, std::sync::atomic::Ordering::Relaxed);
+            // Tray quit / Cmd+Q never fires CloseRequested on the hidden
+            // window, so land the final geometry here.
+            use tauri::Manager;
+            if let Some(webview_window) = app_handle.get_webview_window("main") {
+                let webview: tauri::webview::Webview = webview_window.as_ref().clone();
+                capture_window_geometry(&webview.window(), true);
+            }
         }
         // Clicking the Dock icon while the window is hidden in the tray
         // brings it back (macOS sends Reopen, Tauri does not show by itself).
