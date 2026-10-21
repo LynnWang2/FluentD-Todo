@@ -48,6 +48,7 @@ struct UiState {
     opacity: Option<f64>,
     theme: Option<String>,
     hide_completed: Option<bool>,
+    quick_section: Option<String>,
 }
 
 fn ui_state_file(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -75,7 +76,7 @@ fn get_ui_state(app: tauri::AppHandle) -> Result<UiState, String> {
 }
 
 #[tauri::command]
-fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<String>, hide_completed: Option<bool>) -> Result<(), String> {
+fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<String>, hide_completed: Option<bool>, quick_section: Option<String>) -> Result<(), String> {
     let mut state = load_ui_state(&app);
     if opacity.is_some() {
         state.opacity = opacity;
@@ -85,6 +86,9 @@ fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<Stri
     }
     if hide_completed.is_some() {
         state.hide_completed = hide_completed;
+    }
+    if quick_section.is_some() {
+        state.quick_section = quick_section;
     }
     store_ui_state(&app, &state)
 }

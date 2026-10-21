@@ -1968,6 +1968,10 @@ let isPolling = false;
 let writeQueue = Promise.resolve();
 let currentFilter = "all"; // 'all' | 'active' | 'completed' | 'section:<name>'
 let hideCompletedTasks = false;
+// Quick-add category restored from the saved UI state; applied by the first
+// renderApp whose rebuilt options actually contain it (the options depend
+// on the loaded document, which arrives after the prefs restore).
+let restoredQuickSection = null;
 let searchQuery = "";
 let editingLineIndex = null;
 // How many lines the edited title wraps to, measured when edit mode starts,
@@ -2464,7 +2468,10 @@ function renderApp() {
     sectionSelect.appendChild(opt);
   });
 
-  if ([...sectionSelect.options].some(o => o.value === prevSelectedSec)) {
+  if (restoredQuickSection !== null && [...sectionSelect.options].some(o => o.value === restoredQuickSection)) {
+    sectionSelect.value = restoredQuickSection;
+    restoredQuickSection = null;
+  } else if ([...sectionSelect.options].some(o => o.value === prevSelectedSec)) {
     sectionSelect.value = prevSelectedSec;
   }
 
@@ -2700,6 +2707,7 @@ function setFilter(filterKey, customLabel) {
   } else {
     sectionSelect.value = "__uncategorized__";
   }
+  saveUiPrefs();
 }
 
 function escapeHtml(str) {
@@ -2840,6 +2848,8 @@ document.getElementById("btnClearCompleted").addEventListener("click", () => {
   saveUiPrefs();
   renderApp();
 });
+
+sectionSelect.addEventListener("change", saveUiPrefs);
 
 searchInput.addEventListener("input", e => {
   searchQuery = e.target.value.trim();
@@ -3056,7 +3066,7 @@ function applyTheme() {
 // next launch restores them; window geometry is captured natively instead.
 function saveUiPrefs() {
   if (!window.__TAURI_INTERNALS__) return;
-  invoke("save_ui_prefs", { opacity: Number(opacitySlider.value), theme: themeMode, hideCompleted: hideCompletedTasks })
+  invoke("save_ui_prefs", { opacity: Number(opacitySlider.value), theme: themeMode, hideCompleted: hideCompletedTasks, quickSection: sectionSelect.value })
     .catch(error => console.error("Could not save UI prefs:", error));
 }
 btnTheme.addEventListener("click", () => {
@@ -3471,6 +3481,7 @@ if (window.__TAURI_INTERNALS__) {
           applyOpacity(uiState.opacity);
         }
         if (typeof uiState.hide_completed === "boolean") hideCompletedTasks = uiState.hide_completed;
+        if (typeof uiState.quick_section === "string") restoredQuickSection = uiState.quick_section;
       }
     } catch (error) {
       console.error("Could not restore UI prefs:", error);
