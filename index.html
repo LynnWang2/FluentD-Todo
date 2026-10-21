@@ -438,7 +438,7 @@
 
   /* Toolbar / File Selection Bar */
   .file-toolbar {
-    padding: 12px 18px;
+    padding: 12px 18px 12px 12px;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -730,17 +730,6 @@
     color: var(--text-primary);
     font-weight: 600;
     box-shadow: var(--shadow-card);
-  }
-
-  .nav-item.active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: 3px;
-    background: var(--accent);
   }
 
   .nav-label {
@@ -1423,12 +1412,21 @@
     outline: none;
   }
 
-  /* Section heading row with its + (new section) button */
+  /* Section heading row with its + (new section) button. The row carries
+     the same 10px horizontal inset as .nav-item so the + button's right
+     edge lines up with the count badges above and below; the title inside
+     drops its own horizontal padding to avoid a double inset. */
   .nav-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-top: 8px;
+    padding: 0 10px;
+  }
+
+  .nav-section-head .nav-section-title {
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .mini-add-btn {
@@ -2839,6 +2837,7 @@ newTaskInput.addEventListener("keydown", e => {
 
 document.getElementById("btnClearCompleted").addEventListener("click", () => {
   hideCompletedTasks = !hideCompletedTasks;
+  saveUiPrefs();
   renderApp();
 });
 
@@ -2877,6 +2876,8 @@ function applyOpacity(rawValue) {
   if (!opacityRaf) opacityRaf = requestAnimationFrame(opacityTick);
 }
 opacitySlider.addEventListener("input", e => applyOpacity(e.target.value));
+// Persist on release (the input event fires continuously while dragging).
+opacitySlider.addEventListener("change", saveUiPrefs);
 applyOpacity(opacitySlider.value);
 
 // Frameless window controls, drag and edge resize transitions.
@@ -3051,9 +3052,17 @@ function applyTheme() {
   btnTheme.title = `主题：${THEME_LABELS[themeMode]}（点击切换）`;
   syncNativeWindowTheme();
 }
+// Persist the UI prefs (theme mode + opacity slider) through Rust so the
+// next launch restores them; window geometry is captured natively instead.
+function saveUiPrefs() {
+  if (!window.__TAURI_INTERNALS__) return;
+  invoke("save_ui_prefs", { opacity: Number(opacitySlider.value), theme: themeMode, hideCompleted: hideCompletedTasks })
+    .catch(error => console.error("Could not save UI prefs:", error));
+}
 btnTheme.addEventListener("click", () => {
   themeMode = THEME_CYCLE[(THEME_CYCLE.indexOf(themeMode) + 1) % THEME_CYCLE.length];
   applyTheme();
+  saveUiPrefs();
 });
 if (themeMq.addEventListener) themeMq.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
 else if (themeMq.addListener) themeMq.addListener(() => { if (themeMode === "system") applyTheme(); });
@@ -3447,12 +3456,26 @@ document.getElementById("btnDownloadMd").addEventListener("click", async () => {
 if (window.__TAURI_INTERNALS__) {
   document.body.classList.add("pure-transparent");
 }
-applyTheme();
 
-// Read the last selected document through Rust: Tauri's file-dialog scope is temporary
+// Restore the remembered UI prefs (theme mode + opacity) first, then the
+// last selected document through Rust: Tauri's file-dialog scope is temporary
 // and does not grant the previous file path again after an app restart.
 if (window.__TAURI_INTERNALS__) {
   (async () => {
+    try {
+      const uiState = await invoke("get_ui_state");
+      if (uiState) {
+        if (THEME_CYCLE.includes(uiState.theme)) themeMode = uiState.theme;
+        if (typeof uiState.opacity === "number" && uiState.opacity >= Number(opacitySlider.min) && uiState.opacity <= Number(opacitySlider.max)) {
+          opacitySlider.value = uiState.opacity;
+          applyOpacity(uiState.opacity);
+        }
+        if (typeof uiState.hide_completed === "boolean") hideCompletedTasks = uiState.hide_completed;
+      }
+    } catch (error) {
+      console.error("Could not restore UI prefs:", error);
+    }
+    applyTheme();
     try {
       const legacyPath = localStorage.getItem("fluent-md-todo:last-file");
       if (legacyPath) {
@@ -3475,6 +3498,7 @@ if (window.__TAURI_INTERNALS__) {
     }
   })();
 } else {
+  applyTheme();
   renderApp();
 }
 </script>
