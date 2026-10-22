@@ -20,22 +20,28 @@
        color on hover); pure white on white was invisible, so the light
        hover dips to a cool gray instead. */
     --card-hover-rgb: 233, 237, 244;
-    --text-primary: #1a1b1e;
-    --text-secondary: #5c6068;
-    --text-muted: #8a8f99;
+    /* One ink, four steps: every neutral gray is the base ink (black here,
+       white in the dark theme) at a fixed opacity, so grays blend with the
+       glass behind them instead of fighting a fixed hex picked for one
+       backdrop. Tiers: primary .90 / secondary .60 / muted .42 / disabled .26. */
+    --ink-rgb: 0, 0, 0;
+    --text-primary: rgba(var(--ink-rgb), 0.90);
+    --text-secondary: rgba(var(--ink-rgb), 0.60);
+    --text-muted: rgba(var(--ink-rgb), 0.42);
+    --text-disabled: rgba(var(--ink-rgb), 0.26);
     --accent: #0067c0;
     --accent-hover: #005ba8;
     --accent-light: rgba(0, 103, 192, 0.10);
-    --border-subtle: rgba(0, 0, 0, 0.06);
-    --border-strong: rgba(0, 0, 0, 0.14);
+    --border-subtle: rgba(var(--ink-rgb), 0.08);
+    --border-strong: rgba(var(--ink-rgb), 0.16);
     --specular-border: rgba(255, 255, 255, 0.75);
     --danger: #c42b1c;
     --danger-bg: rgba(196, 43, 28, 0.10);
     --success: #0f7b0f;
     --warning: #d83b01;
-    --slider-filled: #5a5e66;
-    --slider-rest: rgba(0, 0, 0, 0.20);
-    --slider-thumb: #5a5e66;
+    --slider-filled: rgba(var(--ink-rgb), 0.62);
+    --slider-rest: rgba(var(--ink-rgb), 0.20);
+    --slider-thumb: rgba(var(--ink-rgb), 0.62);
     --danger: #c42b1c;
     --shadow-window: 0 20px 50px rgba(0, 0, 0, 0.16), 0 4px 14px rgba(0, 0, 0, 0.06);
     --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.03);
@@ -49,22 +55,24 @@
     --card-rgb: 45, 48, 56;
     --wash-rgb: 22, 26, 38;
     --card-hover-rgb: 54, 58, 68;
-    --text-primary: #f3f4f6;
-    --text-secondary: #a6abb4;
-    --text-muted: #6e737d;
+    --ink-rgb: 255, 255, 255;
+    --text-primary: rgba(var(--ink-rgb), 0.90);
+    --text-secondary: rgba(var(--ink-rgb), 0.60);
+    --text-muted: rgba(var(--ink-rgb), 0.42);
+    --text-disabled: rgba(var(--ink-rgb), 0.26);
     --accent: #60cdff;
     --accent-hover: #7ad5ff;
     --accent-light: rgba(96, 205, 255, 0.14);
-    --border-subtle: rgba(255, 255, 255, 0.07);
-    --border-strong: rgba(255, 255, 255, 0.16);
+    --border-subtle: rgba(var(--ink-rgb), 0.08);
+    --border-strong: rgba(var(--ink-rgb), 0.16);
     --specular-border: rgba(255, 255, 255, 0.10);
     --danger: #ff99a4;
     --danger-bg: rgba(255, 153, 164, 0.14);
     --success: #6ccb5f;
     --warning: #fce100;
-    --slider-filled: #ffffff;
-    --slider-rest: rgba(255, 255, 255, 0.30);
-    --slider-thumb: #ffffff;
+    --slider-filled: rgba(var(--ink-rgb), 0.95);
+    --slider-rest: rgba(var(--ink-rgb), 0.30);
+    --slider-thumb: rgba(var(--ink-rgb), 0.95);
     --danger: #ff7b72;
     --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.48), 0 4px 16px rgba(0, 0, 0, 0.28);
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.18);
@@ -233,7 +241,7 @@
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: #9ca3af;
+    background: var(--text-muted);
   }
 
   .sync-dot.active {
