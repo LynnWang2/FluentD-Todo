@@ -1134,10 +1134,11 @@
     border-color: var(--accent);
   }
 
-  /* Completed check fill matches the muted gray of the completed task text */
+  /* Completed check fill matches the muted gray of the completed task text;
+     no border line on the completed box — the fill alone carries it */
   .task-card.completed .fluent-checkbox {
     background: var(--text-muted);
-    border-color: var(--text-muted);
+    border-color: transparent;
   }
 
   .fluent-checkbox svg {
