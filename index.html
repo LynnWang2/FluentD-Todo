@@ -7,8 +7,8 @@
 <style>
   :root {
     --font-family: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
-    --bg-alpha: 0.76;
-    --card-alpha: 0.65;
+    --bg-alpha: 0.64;
+    --card-alpha: 0.72;
     /* Cool wash that tints the frosted-glass backdrop showing through, so the
        hue stays consistent with the (cool) full-opacity colors at any slider
        position: stronger when the surface is transparent, zero when opaque. */
@@ -1835,7 +1835,7 @@
     <div class="titlebar-actions">
       <div class="opacity-bar" title="调节窗口不透明度">
         <span>不透明度</span>
-        <input type="range" id="opacitySlider" class="opacity-slider" min="35" max="98" value="76" />
+        <input type="range" id="opacitySlider" class="opacity-slider" min="35" max="98" value="64" />
       </div>
       <button class="icon-btn" id="btnRawMd" title="查看或编辑底层 Markdown 源码">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
@@ -2924,6 +2924,14 @@ document.getElementById("btnClearCompleted").addEventListener("click", () => {
 });
 
 sectionSelect.addEventListener("change", saveUiPrefs);
+
+// Belt and braces for the remembered prefs: whenever the window goes away
+// (hidden to the tray, minimized, or on the way out), stamp the prefs
+// exactly as the UI shows them now, so whatever the quick-add selector
+// displays when the app closes is what the next launch restores.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveUiPrefs();
+});
 
 searchInput.addEventListener("input", e => {
   searchQuery = e.target.value.trim();
