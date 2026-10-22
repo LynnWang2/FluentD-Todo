@@ -449,7 +449,7 @@
 
   /* Toolbar / File Selection Bar */
   .file-toolbar {
-    padding: 12px 18px 12px 12px;
+    padding: 12px 16px 12px 12px;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -789,6 +789,7 @@
   .pane-title {
     font-size: 18px;
     font-weight: 600;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 2px;
@@ -807,7 +808,7 @@
     border: none;
     background: transparent;
     border-radius: 6px;
-    color: var(--text-muted);
+    color: var(--text-primary);
     cursor: pointer;
     flex-shrink: 0;
     padding: 0;
@@ -917,7 +918,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   .pane-tools #btnClearCompleted {
@@ -925,11 +927,13 @@
     padding: 0;
     justify-content: center;
     flex-shrink: 0;
+    color: var(--text-secondary);
   }
 
   .search-box {
     position: relative;
-    width: 190px;
+    flex: 0 1 190px;
+    min-width: 96px;
   }
 
   .search-input {
