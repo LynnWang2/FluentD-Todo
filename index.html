@@ -939,6 +939,13 @@
     color: var(--text-secondary);
   }
 
+  /* The closed eye's strokes are shorter and sparser than the open eye's,
+     so at the same color it renders a lighter gray; a heavier stroke
+     evens the two states out to the same perceived gray. */
+  #btnClearCompleted .eye-closed {
+    stroke-width: 2.6;
+  }
+
   .search-box {
     position: relative;
     flex: 0 1 190px;
@@ -1021,6 +1028,17 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  /* On classic-scrollbar platforms (Windows) the scrollbar eats its ~6px
+     on top of the right padding, leaving the cards' right edge short of
+     the header / add-bar edges. Reserve the gutter permanently and hand
+     it back to the padding, so the cards sit at the same 20px inset
+     whether the list scrolls or not. macOS overlay scrollbars take no
+     layout space, so the compensation is scoped away from Mac. */
+  body:not(.is-mac) .task-list-container {
+    scrollbar-gutter: stable;
+    padding-right: 14px;
   }
 
   .task-list-container::-webkit-scrollbar {
