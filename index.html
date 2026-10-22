@@ -2018,7 +2018,8 @@ function resetHistory() {
 let pendingWrites = 0;
 let isPolling = false;
 let writeQueue = Promise.resolve();
-let currentFilter = "all"; // 'all' | 'active' | 'completed' | 'section:<name>'
+let currentStatus = "all"; // 'all' | 'active' | 'completed' — a lens applied within the current scope
+let currentSection = null; // null = all sections (global), otherwise the section name (incl. "未分类")
 let hideCompletedTasks = false;
 // Quick-add category restored from the saved UI state; applied by the first
 // renderApp whose rebuilt options actually contain it (the options depend
@@ -2471,20 +2472,22 @@ function renderApp() {
   countActive.textContent = activeCount;
   countCompleted.textContent = completedCount;
 
-  // The progress bar under the view title reflects the CURRENT view's own
-  // tasks, not the whole file (in 未分类 it shows that group's done/total).
-  const viewTasks = currentFilter === "all" ? tasks
-    : currentFilter === "active" ? tasks.filter(t => !t.completed)
-    : currentFilter === "completed" ? tasks.filter(t => t.completed)
-    : tasks.filter(t => t.section === currentFilter.slice(8));
+  // The progress bar under the view title reflects the current SCOPE: in a
+  // section it is that section's own done/total regardless of the status
+  // lens; in the global scope it follows the status view as before.
+  const viewTasks = currentSection ? tasks.filter(t => t.section === currentSection)
+    : currentStatus === "active" ? tasks.filter(t => !t.completed)
+    : currentStatus === "completed" ? tasks.filter(t => t.completed)
+    : tasks;
   const viewDone = viewTasks.filter(t => t.completed).length;
   const pct = viewTasks.length > 0 ? Math.round((viewDone / viewTasks.length) * 100) : 0;
   progressBar.style.width = `${pct}%`;
   animateProgressText(viewDone, viewTasks.length);
   const completedButton = document.getElementById("btnClearCompleted");
-  completedButton.querySelector(".eye-open").style.display = hideCompletedTasks ? "none" : "";
-  completedButton.querySelector(".eye-closed").style.display = hideCompletedTasks ? "" : "none";
-  completedButton.title = hideCompletedTasks ? "仅在应用中显示已完成的待办" : "仅在应用中隐藏已完成的待办";
+  const hideEff = effectiveHideCompleted();
+  completedButton.querySelector(".eye-open").style.display = hideEff ? "none" : "";
+  completedButton.querySelector(".eye-closed").style.display = hideEff ? "" : "none";
+  completedButton.title = hideEff ? "仅在应用中显示已完成的待办" : "仅在应用中隐藏已完成的待办";
 
   // Render Sidebar Sections
   sectionNavList.innerHTML = "";
@@ -2493,8 +2496,7 @@ function renderApp() {
 
   function addSectionNav(name, count) {
     const navEl = document.createElement("div");
-    const filterKey = `section:${name}`;
-    navEl.className = `nav-item ${currentFilter === filterKey ? "active" : ""}`;
+    navEl.className = `nav-item ${currentSection === name ? "active" : ""}`;
     navEl.dataset.sectionName = name;
     navEl.innerHTML = `
       <div class="nav-label">
@@ -2503,7 +2505,7 @@ function renderApp() {
       </div>
       <span class="nav-count">${count}</span>
     `;
-    navEl.addEventListener("click", () => setFilter(filterKey, name));
+    navEl.addEventListener("click", () => enterSection(name));
     sectionNavList.appendChild(navEl);
   }
 
@@ -2527,15 +2529,12 @@ function renderApp() {
     sectionSelect.value = prevSelectedSec;
   }
 
-  // Filter Tasks
+  // Filter Tasks: status lens within the current section scope.
   const filteredTasks = tasks.filter(t => {
-    if (hideCompletedTasks && t.completed) return false;
-    if (currentFilter === "active" && t.completed) return false;
-    if (currentFilter === "completed" && !t.completed) return false;
-    if (currentFilter.startsWith("section:")) {
-      const targetSec = currentFilter.slice(8);
-      if (t.section !== targetSec) return false;
-    }
+    if (effectiveHideCompleted() && t.completed) return false;
+    if (currentStatus === "active" && t.completed) return false;
+    if (currentStatus === "completed" && !t.completed) return false;
+    if (currentSection && t.section !== currentSection) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!t.rawText.toLowerCase().includes(q) && !t.section.toLowerCase().includes(q)) {
@@ -2560,8 +2559,8 @@ function renderApp() {
   // Group the display tasks by section. In the "all" view every section of
   // the document gets a group — even an empty one — so each category shows
   // its own quick-add row; a single-section view always gets its one group.
-  const isSectionView = currentFilter.startsWith("section:");
-  const showAddRows = currentFilter !== "completed" && !searchQuery;
+  const isSectionView = currentSection !== null;
+  const showAddRows = currentStatus !== "completed" && !searchQuery;
   const groups = [];
   {
     const bySection = new Map();
@@ -2570,9 +2569,8 @@ function renderApp() {
       bySection.get(t.section).push(t);
     });
     if (isSectionView) {
-      const viewName = currentFilter.slice(8);
-      groups.push({ name: viewName, tasks: bySection.get(viewName) || [] });
-    } else if (currentFilter === "all" && !searchQuery) {
+      groups.push({ name: currentSection, tasks: bySection.get(currentSection) || [] });
+    } else if (currentStatus === "all" && !searchQuery) {
       if ((bySection.get("未分类") || []).length > 0 || sections.length === 0) {
         groups.push({ name: "未分类", tasks: bySection.get("未分类") || [] });
       }
@@ -2718,37 +2716,71 @@ function renderApp() {
   justToggledLineIndex = null;
 }
 
-function setFilter(filterKey, customLabel) {
-  listEnterPending = true;
-  currentFilter = filterKey;
+// The eye's effective state: in the 已完成 status lens the completed tasks
+// are exactly what the user asked to see, so hiding is suspended (the eye
+// shows open) no matter the saved preference; leaving the lens restores
+// whatever the eye was set to before.
+function effectiveHideCompleted() {
+  return currentStatus === "completed" ? false : hideCompletedTasks;
+}
+
+// Keep the status controls (sidebar items + compact pills), the view title
+// and the section highlights in sync with the current scope x status.
+function syncFilterChrome() {
   document.querySelectorAll("#sidebarNav .nav-item[data-filter]").forEach(el => {
-    el.classList.toggle("active", el.dataset.filter === filterKey);
+    el.classList.toggle("active", el.dataset.filter === currentStatus);
   });
   document.querySelectorAll("#compactFilters .filter-pill").forEach(el => {
-    el.classList.toggle("active", el.dataset.filter === filterKey);
+    el.classList.toggle("active", el.dataset.filter === currentStatus);
   });
-
   const titles = {
     all: "全部待办",
     active: "进行中",
     completed: "已完成"
   };
-  currentViewTitle.textContent = customLabel ? `# ${customLabel}` : (titles[filterKey] || "全部待办");
-  renderApp();
+  currentViewTitle.textContent = currentSection ? `# ${currentSection}` : titles[currentStatus];
+}
 
-  // Quick-add target follows the current view: entering a section points the
-  // bottom-right selector at that section; other views reset it to 未分类.
-  // (A later manual change of the selector is preserved by renderApp as before.)
-  if (filterKey.startsWith("section:")) {
-    const targetSec = filterKey.slice(8);
-    if (targetSec === "未分类") {
-      sectionSelect.value = "__uncategorized__";
-    } else if ([...sectionSelect.options].some(o => o.value === targetSec)) {
-      sectionSelect.value = targetSec;
-    }
+// Quick-add target follows the scope: a section scope points the selector
+// at that section; the global scope resets it to 未分类. (A later manual
+// change of the selector is preserved by renderApp as before.)
+function followQuickAddToScope() {
+  if (currentSection && currentSection !== "未分类" && [...sectionSelect.options].some(o => o.value === currentSection)) {
+    sectionSelect.value = currentSection;
   } else {
     sectionSelect.value = "__uncategorized__";
   }
+}
+
+// Status lens change: stays inside the current scope — in a section, the
+// 全部/进行中/已完成 controls filter THAT section's tasks.
+function setStatusFilter(status) {
+  listEnterPending = true;
+  currentStatus = status;
+  syncFilterChrome();
+  renderApp();
+}
+
+// Enter a section scope (fresh: the status lens resets to 全部).
+function enterSection(name) {
+  listEnterPending = true;
+  currentSection = name;
+  currentStatus = "all";
+  syncFilterChrome();
+  renderApp();
+  followQuickAddToScope();
+  saveUiPrefs();
+}
+
+// Leave the section scope back to a global status view (the title chevron
+// panel's 全部待办/进行中/已完成 entries land here).
+function exitToGlobal(status) {
+  listEnterPending = true;
+  currentSection = null;
+  currentStatus = status;
+  syncFilterChrome();
+  renderApp();
+  followQuickAddToScope();
   saveUiPrefs();
 }
 
@@ -2778,25 +2810,25 @@ function buildViewSwitchPanel() {
   const { tasks, sections } = parseMarkdown(rawContent);
   viewSwitchPanel.innerHTML = "";
   const allItem = document.createElement("div");
-  allItem.className = `view-switch-item ${currentFilter === "all" ? "active" : ""}`;
+  allItem.className = `view-switch-item ${currentSection === null && currentStatus === "all" ? "active" : ""}`;
   allItem.innerHTML = `<span>全部待办</span><span class="nav-count">${tasks.length}</span>`;
-  allItem.addEventListener("click", () => { closeViewSwitch(); setFilter("all"); });
+  allItem.addEventListener("click", () => { closeViewSwitch(); exitToGlobal("all"); });
   viewSwitchPanel.appendChild(allItem);
   const activeCount = tasks.filter(t => !t.completed).length;
   const addView = (label, key, count) => {
     const item = document.createElement("div");
-    item.className = `view-switch-item ${currentFilter === key ? "active" : ""}`;
+    item.className = `view-switch-item ${currentSection === null && currentStatus === key ? "active" : ""}`;
     item.innerHTML = `<span>${label}</span><span class="nav-count">${count}</span>`;
-    item.addEventListener("click", () => { closeViewSwitch(); setFilter(key); });
+    item.addEventListener("click", () => { closeViewSwitch(); exitToGlobal(key); });
     viewSwitchPanel.appendChild(item);
   };
   addView("进行中", "active", activeCount);
   addView("已完成", "completed", tasks.length - activeCount);
   const addItem = (name, count) => {
     const item = document.createElement("div");
-    item.className = `view-switch-item ${currentFilter === `section:${name}` ? "active" : ""}`;
+    item.className = `view-switch-item ${currentSection === name ? "active" : ""}`;
     item.innerHTML = `<span>${name === "未分类" ? "未分类" : `# ${escapeHtml(name)}`}</span><span class="nav-count">${count}</span>`;
-    item.addEventListener("click", () => { closeViewSwitch(); setFilter(`section:${name}`, name); });
+    item.addEventListener("click", () => { closeViewSwitch(); enterSection(name); });
     viewSwitchPanel.appendChild(item);
   };
   const uncatCount = tasks.filter(t => t.section === "未分类").length;
@@ -2875,10 +2907,10 @@ document.getElementById("btnCreateFile").addEventListener("click", async () => {
 
 // Event Listeners
 document.querySelectorAll("#sidebarNav .nav-item[data-filter]").forEach(el => {
-  el.addEventListener("click", () => setFilter(el.dataset.filter));
+  el.addEventListener("click", () => setStatusFilter(el.dataset.filter));
 });
 document.querySelectorAll("#compactFilters .filter-pill").forEach(el => {
-  el.addEventListener("click", () => setFilter(el.dataset.filter));
+  el.addEventListener("click", () => setStatusFilter(el.dataset.filter));
 });
 
 newTaskInput.addEventListener("keydown", e => {
@@ -3183,7 +3215,7 @@ function createSection(name) {
   const base = rawContent.replace(/\n+$/, "");
   saveToMarkdownFile((base ? base + "\n\n" : "") + `# ${clean}\n`, "已新建分类");
   showToast(`已新建分类 # ${clean}`);
-  setFilter(`section:${clean}`, clean);
+  enterSection(clean);
   return true;
 }
 
@@ -3193,7 +3225,7 @@ function deleteSection(name) {
   if (!sec) return;
   const removed = lines[sec.lineIndex];
   lines.splice(sec.lineIndex, 1);
-  if (currentFilter === `section:${name}`) setFilter("all");
+  if (currentSection === name) exitToGlobal("all");
   saveToMarkdownFile(lines.join("\n"), "已删除分类");
   showToast(`已删除分类 # ${name}，里面的待办保留并归入相邻分类`, {
     label: "撤销",
