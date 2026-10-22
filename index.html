@@ -1782,6 +1782,9 @@
     </div>
 
     <div class="titlebar-actions">
+      <button class="icon-btn" id="btnPin" title="窗口置顶" aria-label="窗口置顶" aria-pressed="false">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12"/><path d="M9.5 4v5L7 12.5h10L14.5 9V4"/><path d="M12 12.5V20"/></svg>
+      </button>
       <div class="window-controls" aria-label="窗口控制">
         <button class="window-control" id="btnMinimize" title="最小化" aria-label="最小化">
           <svg viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M2 6h8"/></svg>
@@ -3124,11 +3127,34 @@ function applyTheme() {
   if (opacityShown !== null) paintOpacity(opacityShown);
   syncNativeWindowTheme();
 }
+// Window pin (always on top): lives in the titlebar just left of the
+// window controls. The state is persisted like every other UI pref; Rust
+// re-applies it at startup, the button only reflects and toggles it.
+let alwaysOnTop = false;
+const btnPin = document.getElementById("btnPin");
+function syncPinButton() {
+  btnPin.classList.toggle("active", alwaysOnTop);
+  btnPin.setAttribute("aria-pressed", String(alwaysOnTop));
+  btnPin.title = alwaysOnTop ? "已置顶（点击取消置顶）" : "窗口置顶";
+}
+btnPin.addEventListener("click", async () => {
+  alwaysOnTop = !alwaysOnTop;
+  syncPinButton();
+  if (window.__TAURI_INTERNALS__) {
+    try {
+      await getCurrentWindow().setAlwaysOnTop(alwaysOnTop);
+    } catch (error) {
+      console.error("Could not set always-on-top:", error);
+    }
+  }
+  saveUiPrefs();
+});
+
 // Persist the UI prefs (theme mode + opacity slider) through Rust so the
 // next launch restores them; window geometry is captured natively instead.
 function saveUiPrefs() {
   if (!window.__TAURI_INTERNALS__) return;
-  invoke("save_ui_prefs", { opacity: Number(opacitySlider.value), theme: themeMode, hideCompleted: hideCompletedTasks, quickSection: sectionSelect.value })
+  invoke("save_ui_prefs", { opacity: Number(opacitySlider.value), theme: themeMode, hideCompleted: hideCompletedTasks, quickSection: sectionSelect.value, alwaysOnTop: alwaysOnTop })
     .catch(error => console.error("Could not save UI prefs:", error));
 }
 btnTheme.addEventListener("click", () => {
@@ -3577,6 +3603,10 @@ if (window.__TAURI_INTERNALS__) {
         }
         if (typeof uiState.hide_completed === "boolean") hideCompletedTasks = uiState.hide_completed;
         if (typeof uiState.quick_section === "string") restoredQuickSection = uiState.quick_section;
+        if (typeof uiState.always_on_top === "boolean") {
+          alwaysOnTop = uiState.always_on_top;
+          syncPinButton();
+        }
       }
     } catch (error) {
       console.error("Could not restore UI prefs:", error);

@@ -49,6 +49,7 @@ struct UiState {
     theme: Option<String>,
     hide_completed: Option<bool>,
     quick_section: Option<String>,
+    always_on_top: Option<bool>,
 }
 
 fn ui_state_file(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -76,7 +77,7 @@ fn get_ui_state(app: tauri::AppHandle) -> Result<UiState, String> {
 }
 
 #[tauri::command]
-fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<String>, hide_completed: Option<bool>, quick_section: Option<String>) -> Result<(), String> {
+fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<String>, hide_completed: Option<bool>, quick_section: Option<String>, always_on_top: Option<bool>) -> Result<(), String> {
     let mut state = load_ui_state(&app);
     if opacity.is_some() {
         state.opacity = opacity;
@@ -89,6 +90,9 @@ fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<Stri
     }
     if quick_section.is_some() {
         state.quick_section = quick_section;
+    }
+    if always_on_top.is_some() {
+        state.always_on_top = always_on_top;
     }
     store_ui_state(&app, &state)
 }
@@ -501,6 +505,10 @@ pub fn run() {
                                 let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
                             }
                         }
+                    }
+                    // Re-apply the pinned (always-on-top) state the user left.
+                    if saved.always_on_top == Some(true) {
+                        let _ = window.set_always_on_top(true);
                     }
                     #[cfg(target_os = "windows")]
                     let effects = EffectsBuilder::new().effect(tauri::window::Effect::Blur).build();
