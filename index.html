@@ -23,25 +23,36 @@
     /* One ink, four steps: every neutral gray is the base ink (black here,
        white in the dark theme) at a fixed opacity, so grays blend with the
        glass behind them instead of fighting a fixed hex picked for one
-       backdrop. Tiers: primary .90 / secondary .60 / muted .42 / disabled .26. */
+       backdrop. Tiers: primary .90 / secondary .60 / muted .42 / disabled .26.
+       The alphas are CSS variables because the opacity slider raises them
+       again below 64 to keep elements legible over clearer glass (see
+       paintOpacity); the values here are the un-boosted bases. */
     --ink-rgb: 0, 0, 0;
-    --text-primary: rgba(var(--ink-rgb), 0.90);
-    --text-secondary: rgba(var(--ink-rgb), 0.60);
-    --text-muted: rgba(var(--ink-rgb), 0.42);
-    --text-disabled: rgba(var(--ink-rgb), 0.26);
+    --alpha-primary: 0.90;
+    --alpha-secondary: 0.60;
+    --alpha-muted: 0.42;
+    --alpha-disabled: 0.26;
+    --alpha-border-subtle: 0.08;
+    --alpha-border-strong: 0.16;
+    --alpha-slider: 0.62;
+    --alpha-slider-rest: 0.20;
+    --text-primary: rgba(var(--ink-rgb), var(--alpha-primary));
+    --text-secondary: rgba(var(--ink-rgb), var(--alpha-secondary));
+    --text-muted: rgba(var(--ink-rgb), var(--alpha-muted));
+    --text-disabled: rgba(var(--ink-rgb), var(--alpha-disabled));
     --accent: #0067c0;
     --accent-hover: #005ba8;
     --accent-light: rgba(0, 103, 192, 0.10);
-    --border-subtle: rgba(var(--ink-rgb), 0.08);
-    --border-strong: rgba(var(--ink-rgb), 0.16);
+    --border-subtle: rgba(var(--ink-rgb), var(--alpha-border-subtle));
+    --border-strong: rgba(var(--ink-rgb), var(--alpha-border-strong));
     --specular-border: rgba(255, 255, 255, 0.75);
     --danger: #c42b1c;
     --danger-bg: rgba(196, 43, 28, 0.10);
     --success: #0f7b0f;
     --warning: #d83b01;
-    --slider-filled: rgba(var(--ink-rgb), 0.62);
-    --slider-rest: rgba(var(--ink-rgb), 0.20);
-    --slider-thumb: rgba(var(--ink-rgb), 0.62);
+    --slider-filled: rgba(var(--ink-rgb), var(--alpha-slider));
+    --slider-rest: rgba(var(--ink-rgb), var(--alpha-slider-rest));
+    --slider-thumb: rgba(var(--ink-rgb), var(--alpha-slider));
     --danger: #c42b1c;
     --shadow-window: 0 20px 50px rgba(0, 0, 0, 0.16), 0 4px 14px rgba(0, 0, 0, 0.06);
     --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.03);
@@ -56,23 +67,21 @@
     --wash-rgb: 22, 26, 38;
     --card-hover-rgb: 54, 58, 68;
     --ink-rgb: 255, 255, 255;
-    --text-primary: rgba(var(--ink-rgb), 0.90);
-    --text-secondary: rgba(var(--ink-rgb), 0.60);
-    --text-muted: rgba(var(--ink-rgb), 0.42);
-    --text-disabled: rgba(var(--ink-rgb), 0.26);
+    --alpha-slider: 0.95;
+    --alpha-slider-rest: 0.30;
     --accent: #60cdff;
     --accent-hover: #7ad5ff;
     --accent-light: rgba(96, 205, 255, 0.14);
-    --border-subtle: rgba(var(--ink-rgb), 0.08);
-    --border-strong: rgba(var(--ink-rgb), 0.16);
+    --border-subtle: rgba(var(--ink-rgb), var(--alpha-border-subtle));
+    --border-strong: rgba(var(--ink-rgb), var(--alpha-border-strong));
     --specular-border: rgba(255, 255, 255, 0.10);
     --danger: #ff99a4;
     --danger-bg: rgba(255, 153, 164, 0.14);
     --success: #6ccb5f;
     --warning: #fce100;
-    --slider-filled: rgba(var(--ink-rgb), 0.95);
-    --slider-rest: rgba(var(--ink-rgb), 0.30);
-    --slider-thumb: rgba(var(--ink-rgb), 0.95);
+    --slider-filled: rgba(var(--ink-rgb), var(--alpha-slider));
+    --slider-rest: rgba(var(--ink-rgb), var(--alpha-slider-rest));
+    --slider-thumb: rgba(var(--ink-rgb), var(--alpha-slider));
     --danger: #ff7b72;
     --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.48), 0 4px 16px rgba(0, 0, 0, 0.28);
     --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.18);
@@ -2894,12 +2903,32 @@ let opacityShown = null;
 let opacityTarget = null;
 let opacityRaf = 0;
 function paintOpacity(val) {
-  document.documentElement.style.setProperty("--bg-alpha", val.toFixed(2));
-  document.documentElement.style.setProperty("--card-alpha", Math.min(0.95, val + 0.08).toFixed(2));
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--bg-alpha", val.toFixed(2));
+  rootStyle.setProperty("--card-alpha", Math.min(0.95, val + 0.08).toFixed(2));
   // Cool wash over the backdrop: fills exactly the share not covered by the
   // window surface, so sliding changes lightness, not hue.
   const covered = val * val * 0.97;
-  document.documentElement.style.setProperty("--wash-alpha", ((1 - covered) * 0.30).toFixed(3));
+  rootStyle.setProperty("--wash-alpha", ((1 - covered) * 0.30).toFixed(3));
+  // Legibility compensation: below a surface opacity of 64 the glass gets
+  // clearer than the ink tiers were tuned for — over a see-through surface
+  // their effective opacity multiplies down and elements wash out. So from
+  // 64 down to the slider minimum (35) every ink alpha is raised in
+  // proportion toward its cap: text tiers and the slider can reach 1, the
+  // disabled gray caps at 0.50 so it never reads as clickable, borders cap
+  // lower (they are hairlines, not content). Stepless: recomputed from the
+  // eased value on every animation frame.
+  const t = Math.min(1, Math.max(0, (0.64 - val) / (0.64 - 0.35)));
+  const boost = (base, cap) => (base + (cap - base) * t).toFixed(3);
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  rootStyle.setProperty("--alpha-primary", boost(0.90, 1));
+  rootStyle.setProperty("--alpha-secondary", boost(0.60, 1));
+  rootStyle.setProperty("--alpha-muted", boost(0.42, 1));
+  rootStyle.setProperty("--alpha-disabled", boost(0.26, 0.50));
+  rootStyle.setProperty("--alpha-border-strong", boost(0.16, 0.50));
+  rootStyle.setProperty("--alpha-border-subtle", boost(0.08, 0.24));
+  rootStyle.setProperty("--alpha-slider", boost(dark ? 0.95 : 0.62, 1));
+  rootStyle.setProperty("--alpha-slider-rest", boost(dark ? 0.30 : 0.20, 0.45));
 }
 function opacityTick() {
   opacityShown += (opacityTarget - opacityShown) * 0.3;
@@ -3090,6 +3119,9 @@ function applyTheme() {
   document.getElementById("themeIconSun").style.display = themeMode === "light" ? "" : "none";
   document.getElementById("themeIconMoon").style.display = themeMode === "dark" ? "" : "none";
   btnTheme.title = `主题：${THEME_LABELS[themeMode]}（点击切换）`;
+  // The slider's legibility boost uses per-theme base alphas; repaint so a
+  // theme switch picks the new bases up without waiting for a slider move.
+  if (opacityShown !== null) paintOpacity(opacityShown);
   syncNativeWindowTheme();
 }
 // Persist the UI prefs (theme mode + opacity slider) through Rust so the
