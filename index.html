@@ -3324,7 +3324,6 @@ function applyResponsiveLayout() {
   appWindow.classList.toggle("sidebar-toggle-gone", w < SIDEBAR_TOGGLE_HIDE_THRESHOLD);
   const sbNarrow = w < SIDEBAR_NARROW_THRESHOLD;
   appWindow.classList.toggle("sidebar-locked", sbNarrow);
-  btnSidebarToggle.title = sbNarrow ? `窗口拉宽到 ${SIDEBAR_NARROW_THRESHOLD} 以上后可用` : "展开 / 收起侧边栏";
   if (sbNarrow && !wasSidebarNarrow && !appWindow.classList.contains("sidebar-collapsed")) {
     setSidebarCollapsed(true);
     sidebarAutoCollapsed = true;
