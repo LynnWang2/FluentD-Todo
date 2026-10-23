@@ -1189,6 +1189,22 @@
     cursor: pointer;
   }
 
+  .task-link {
+    color: var(--accent);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .task-link:hover {
+    text-decoration: underline;
+  }
+
+  /* In a completed card the text is muted and struck; links follow the
+     text instead of staying accent-bright. */
+  .task-card.completed .task-link {
+    color: inherit;
+  }
+
   .task-text-row {
     display: flex;
     align-items: center;
@@ -2671,7 +2687,7 @@ function renderApp() {
 
       const textSpan = document.createElement("span");
       textSpan.className = "task-text";
-      textSpan.textContent = task.displayText;
+      appendRichText(textSpan, task.displayText);
       textSpan.title = "点击直接修改此条待办文字";
       row.appendChild(textSpan);
 
@@ -2733,6 +2749,63 @@ function renderApp() {
   listEnterPending = false;
   newCardLineIndex = null;
   justToggledLineIndex = null;
+}
+
+// Open a web link from a task in the system browser (a plain browser
+// preview falls back to a new tab).
+function openExternalUrl(url) {
+  if (window.__TAURI_INTERNALS__) {
+    invoke("open_external_url", { url }).catch(error => console.error("Could not open link:", error));
+  } else {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+// Fill a task-text span, linkifying every web URL however it is written:
+// Markdown links [label](https://…), angle autolinks <https://…>, bare
+// https://… URLs and www. hosts. Everything else stays plain text
+// nodes, so task text can never inject markup. Only http(s) is linked.
+function appendRichText(span, text) {
+  const linkRe = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)/g;
+  // Trailing characters that belong to the sentence, not the URL (ASCII
+  // and CJK punctuation); a closing paren is trimmed only when unbalanced.
+  const trimTail = raw => {
+    let url = raw;
+    for (;;) {
+      const tail = url[url.length - 1];
+      if (".,;:!?，。、；：！？）】」』…".includes(tail)) { url = url.slice(0, -1); continue; }
+      if (tail === ")" && !url.includes("(")) { url = url.slice(0, -1); continue; }
+      if (tail === "]" && !url.includes("[")) { url = url.slice(0, -1); continue; }
+      return url;
+    }
+  };
+  const addAnchor = (label, url) => {
+    const a = document.createElement("a");
+    a.className = "task-link";
+    a.textContent = label;
+    a.href = url;
+    a.title = url;
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      openExternalUrl(url);
+    });
+    span.appendChild(a);
+  };
+  let last = 0;
+  let m;
+  while ((m = linkRe.exec(text)) !== null) {
+    let label, url, consumed = m[0].length;
+    if (m[1] !== undefined) { label = m[1]; url = m[2]; }
+    else if (m[3] !== undefined) { label = m[3]; url = m[3]; }
+    else if (m[4] !== undefined) { url = trimTail(m[4]); label = url; consumed = m[0].length - (m[4].length - url.length); }
+    else { const raw = m[5]; url = trimTail(raw); label = url; consumed = m[0].length - (raw.length - url.length); url = `https://${url}`; }
+    if (m.index > last) span.appendChild(document.createTextNode(text.slice(last, m.index)));
+    addAnchor(label, url);
+    last = m.index + consumed;
+    linkRe.lastIndex = last;
+  }
+  if (last < text.length) span.appendChild(document.createTextNode(text.slice(last)));
 }
 
 // The eye's effective state: in the 已完成 status lens the completed tasks

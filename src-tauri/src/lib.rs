@@ -97,6 +97,33 @@ fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<Stri
     store_ui_state(&app, &state)
 }
 
+/// Open an http(s) link from a task in the system browser. Only web URLs
+/// are allowed; the platform opener differs per OS (rundll32's protocol
+/// handler on Windows avoids cmd's URL-quoting pitfalls).
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("only http(s) links can be opened".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("rundll32")
+        .arg("url.dll,FileProtocolHandler")
+        .arg(&url)
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    #[cfg(all(unix, not(target_os = "macos")))]
+    std::process::Command::new("xdg-open")
+        .arg(&url)
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 static LAST_GEOMETRY_SAVE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
 /// Snapshot the main window's position/size into the UI state. Move/resize
@@ -534,7 +561,8 @@ pub fn run() {
             set_autostart_state,
             set_window_corner_radius,
             get_ui_state,
-            save_ui_prefs
+            save_ui_prefs,
+            open_external_url
         ])
         .build(tauri::generate_context!())
         .expect("failed to run Fluent MD Todo");
