@@ -1205,6 +1205,21 @@
     color: inherit;
   }
 
+  .task-text strong {
+    font-weight: 700;
+  }
+
+  .task-highlight {
+    background: rgba(255, 200, 40, 0.38);
+    color: inherit;
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+
+  [data-theme="dark"] .task-highlight {
+    background: rgba(255, 200, 40, 0.30);
+  }
+
   .task-text-row {
     display: flex;
     align-items: center;
@@ -2672,6 +2687,7 @@ function renderApp() {
       input.value = task.rawText;
       const commitEdit = () => updateTaskText(task.lineIndex, input.value.replace(/\s*\n\s*/g, " "));
       input.addEventListener("keydown", e => {
+        if (isBoldShortcut(e)) { e.preventDefault(); toggleBoldSelection(input); return; }
         if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
         if (e.key === "Escape") {
           editingLineIndex = null;
@@ -2763,10 +2779,12 @@ function openExternalUrl(url) {
 
 // Fill a task-text span, linkifying every web URL however it is written:
 // Markdown links [label](https://…), angle autolinks <https://…>, bare
-// https://… URLs and www. hosts. Everything else stays plain text
-// nodes, so task text can never inject markup. Only http(s) is linked.
-function appendRichText(span, text) {
-  const linkRe = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)/g;
+// https://… URLs and www. hosts. **bold** and ==highlight== render too,
+// and the syntaxes nest (a bold link label, a link inside a bold run).
+// Everything else stays plain text nodes, so task text can never inject
+// markup. Only http(s) is linked.
+function appendRichText(span, text, inAnchor = false) {
+  const linkRe = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==/g;
   // Trailing characters that belong to the sentence, not the URL (ASCII
   // and CJK punctuation); a closing paren is trimmed only when unbalanced.
   const trimTail = raw => {
@@ -2782,7 +2800,6 @@ function appendRichText(span, text) {
   const addAnchor = (label, url) => {
     const a = document.createElement("a");
     a.className = "task-link";
-    a.textContent = label;
     a.href = url;
     a.title = url;
     a.addEventListener("click", e => {
@@ -2790,22 +2807,115 @@ function appendRichText(span, text) {
       e.stopPropagation();
       openExternalUrl(url);
     });
+    appendRichText(a, label, true);
     span.appendChild(a);
   };
   let last = 0;
   let m;
   while ((m = linkRe.exec(text)) !== null) {
-    let label, url, consumed = m[0].length;
-    if (m[1] !== undefined) { label = m[1]; url = m[2]; }
-    else if (m[3] !== undefined) { label = m[3]; url = m[3]; }
-    else if (m[4] !== undefined) { url = trimTail(m[4]); label = url; consumed = m[0].length - (m[4].length - url.length); }
-    else { const raw = m[5]; url = trimTail(raw); label = url; consumed = m[0].length - (raw.length - url.length); url = `https://${url}`; }
+    let consumed = m[0].length;
     if (m.index > last) span.appendChild(document.createTextNode(text.slice(last, m.index)));
-    addAnchor(label, url);
+    if (inAnchor && m[6] === undefined && m[7] === undefined) {
+      // A URL inside a link label stays plain text; linkifying it again
+      // would recurse without end (a bare URL's label is the URL itself).
+      span.appendChild(document.createTextNode(m[0]));
+      last = m.index + consumed;
+      linkRe.lastIndex = last;
+      continue;
+    }
+    if (m[1] !== undefined) {
+      addAnchor(m[1], m[2]);
+    } else if (m[3] !== undefined) {
+      addAnchor(m[3], m[3]);
+    } else if (m[4] !== undefined) {
+      const url = trimTail(m[4]);
+      consumed = m[0].length - (m[4].length - url.length);
+      addAnchor(url, url);
+    } else if (m[5] !== undefined) {
+      const raw = trimTail(m[5]);
+      consumed = m[0].length - (m[5].length - raw.length);
+      addAnchor(raw, `https://${raw}`);
+    } else if (m[6] !== undefined) {
+      const strong = document.createElement("strong");
+      appendRichText(strong, m[6]);
+      span.appendChild(strong);
+    } else {
+      const mark = document.createElement("mark");
+      mark.className = "task-highlight";
+      appendRichText(mark, m[7]);
+      span.appendChild(mark);
+    }
     last = m.index + consumed;
     linkRe.lastIndex = last;
   }
   if (last < text.length) span.appendChild(document.createTextNode(text.slice(last)));
+}
+
+// Ctrl/Cmd+B in a text field: toggle **bold** around the selection the
+// way a rich text editor would —
+//   plain selection           -> wrap it
+//   selection == a bold span  -> unwrap it (markers just outside the
+//                                selection, or included in it)
+//   selection inside a span   -> split the span, unbolding only the
+//                                selection
+//   selection overlapping one or more spans -> merge everything it
+//                                touches into a single bold span
+//   no selection              -> drop an empty **** and put the caret
+//                                between the markers
+function toggleBoldSelection(input) {
+  const value = input.value;
+  const s = input.selectionStart;
+  const e = input.selectionEnd;
+  const finish = (text, ns, ne) => {
+    input.value = text;
+    input.setSelectionRange(ns, ne);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  if (s === e) {
+    finish(value.slice(0, s) + "****" + value.slice(e), s + 2, s + 2);
+    return;
+  }
+  const sel = value.slice(s, e);
+  const whole = sel.match(/^\*\*([^*]+)\*\*$/);
+  if (whole) {
+    finish(value.slice(0, s) + whole[1] + value.slice(e), s, s + whole[1].length);
+    return;
+  }
+  const spans = [];
+  const spanRe = /\*\*([^*]+)\*\*/g;
+  let sm;
+  while ((sm = spanRe.exec(value)) !== null) {
+    spans.push({ innerStart: sm.index + 2, innerEnd: sm.index + 2 + sm[1].length, text: sm[1] });
+  }
+  const hit = spans.filter(sp => s < sp.innerEnd && e > sp.innerStart);
+  if (hit.length === 0) {
+    finish(value.slice(0, s) + "**" + sel + "**" + value.slice(e), s + 2, e + 2);
+    return;
+  }
+  if (hit.length === 1) {
+    const sp = hit[0];
+    if (s === sp.innerStart && e === sp.innerEnd) {
+      finish(value.slice(0, sp.innerStart - 2) + sp.text + value.slice(sp.innerEnd + 2), sp.innerStart - 2, sp.innerEnd - 2);
+      return;
+    }
+    if (s >= sp.innerStart && e <= sp.innerEnd) {
+      const before = value.slice(sp.innerStart, s);
+      const after = value.slice(e, sp.innerEnd);
+      const rebuilt = (before ? `**${before}**` : "") + sel + (after ? `**${after}**` : "");
+      const head = value.slice(0, sp.innerStart - 2);
+      const selStart = head.length + (before ? before.length + 4 : 0);
+      finish(head + rebuilt + value.slice(sp.innerEnd + 2), selStart, selStart + sel.length);
+      return;
+    }
+  }
+  const uStart = Math.min(s, hit[0].innerStart - 2);
+  const uEnd = Math.max(e, hit[hit.length - 1].innerEnd + 2);
+  const merged = value.slice(uStart, uEnd).replace(/\*\*/g, "");
+  finish(value.slice(0, uStart) + "**" + merged + "**" + value.slice(uEnd), uStart + 2, uStart + 2 + merged.length);
+}
+
+function isBoldShortcut(e) {
+  return (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "b";
 }
 
 // The eye's effective state: in the 已完成 status lens the completed tasks
@@ -3006,6 +3116,7 @@ document.querySelectorAll("#compactFilters .filter-pill").forEach(el => {
 });
 
 newTaskInput.addEventListener("keydown", e => {
+  if (isBoldShortcut(e)) { e.preventDefault(); toggleBoldSelection(newTaskInput); return; }
   if (e.key === "Enter") addNewTask();
 });
 
@@ -3292,6 +3403,9 @@ else if (themeMq.addListener) themeMq.addListener(() => { if (themeMode === "sys
 // Raw Markdown Modal
 const rawModal = document.getElementById("rawModal");
 const rawMarkdownTextarea = document.getElementById("rawMarkdownTextarea");
+rawMarkdownTextarea.addEventListener("keydown", e => {
+  if (isBoldShortcut(e)) { e.preventDefault(); toggleBoldSelection(rawMarkdownTextarea); }
+});
 
 document.getElementById("btnRawMd").addEventListener("click", () => {
   rawMarkdownTextarea.value = rawContent;
