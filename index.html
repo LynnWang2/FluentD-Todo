@@ -948,10 +948,11 @@
   }
 
   /* The closed eye's strokes are shorter and sparser than the open eye's,
-     so at the same color it renders a lighter gray; a heavier stroke
-     evens the two states out to the same perceived gray. */
+     so at the same color it renders a lighter gray; a slightly heavier
+     stroke evens the two states out. 2.6 overshot (the lid arc merged
+     into a heavy bar); 2.25 sits between the too-light 2.0 and that. */
   #btnClearCompleted .eye-closed {
-    stroke-width: 2.6;
+    stroke-width: 2.25;
   }
 
   .search-box {
