@@ -705,6 +705,12 @@
     opacity: 0.45;
   }
 
+  /* Squeezed to the limit, the file pill and the opacity slider would
+     collide: the toggle leaves the toolbar entirely to make room */
+  .fluent-window.sidebar-toggle-gone .sidebar-toggle {
+    display: none;
+  }
+
   /* Squeezed titlebar: the brand text collapses too (Motion section fades
      it), so the icon-only actions on the right always fit */
 
@@ -3289,8 +3295,12 @@ function setSidebarCollapsed(collapsed) {
 }
 btnSidebarToggle.addEventListener("click", () => {
   // Under the sidebar threshold there is no room for the sidebar: the
-  // toggle stays locked until the window is wide enough again.
-  if (window.innerWidth < SIDEBAR_NARROW_THRESHOLD) return;
+  // toggle stays locked until the window is wide enough again — say so
+  // instead of silently ignoring the click.
+  if (window.innerWidth < SIDEBAR_NARROW_THRESHOLD) {
+    showToast(`窗口太窄，侧边栏暂时展开不了——把窗口拉宽到 ${SIDEBAR_NARROW_THRESHOLD} 以上就能用了`);
+    return;
+  }
   sidebarAutoCollapsed = false; // a manual toggle overrides the auto memory
   setSidebarCollapsed(!appWindow.classList.contains("sidebar-collapsed"));
 });
@@ -3303,13 +3313,18 @@ btnSidebarToggle.addEventListener("click", () => {
 // narrowing that hid it (a manual collapse stays).
 const TITLEBAR_NARROW_THRESHOLD = 680;
 const SIDEBAR_NARROW_THRESHOLD = 620;
+// Below this the file pill and the opacity slider start colliding; the
+// sidebar toggle (leftmost in that row) leaves the toolbar to free room.
+const SIDEBAR_TOGGLE_HIDE_THRESHOLD = 420;
 let wasSidebarNarrow = false;
 let sidebarAutoCollapsed = false;
 function applyResponsiveLayout() {
   const w = window.innerWidth;
   appWindow.classList.toggle("auto-narrow", w < TITLEBAR_NARROW_THRESHOLD);
+  appWindow.classList.toggle("sidebar-toggle-gone", w < SIDEBAR_TOGGLE_HIDE_THRESHOLD);
   const sbNarrow = w < SIDEBAR_NARROW_THRESHOLD;
   appWindow.classList.toggle("sidebar-locked", sbNarrow);
+  btnSidebarToggle.title = sbNarrow ? `窗口拉宽到 ${SIDEBAR_NARROW_THRESHOLD} 以上后可用` : "展开 / 收起侧边栏";
   if (sbNarrow && !wasSidebarNarrow && !appWindow.classList.contains("sidebar-collapsed")) {
     setSidebarCollapsed(true);
     sidebarAutoCollapsed = true;
