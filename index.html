@@ -1075,7 +1075,7 @@
      starts exactly where task text starts. */
   .section-add-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 11px;
     padding: 10px 13px;
     border-radius: var(--radius-card);
@@ -1099,6 +1099,7 @@
     border: none;
     background: transparent;
     outline: none;
+    resize: none;
     color: var(--text-primary);
     font-size: 13.5px;
     line-height: 1.4;
@@ -1340,7 +1341,7 @@
     border-top: 1px solid var(--border-subtle);
     background: rgba(var(--surface-rgb), 0.45);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     flex-shrink: 0;
   }
@@ -1354,8 +1355,10 @@
 
   .add-input {
     width: 100%;
-    height: 38px;
-    padding: 0 12px 0 36px;
+    min-height: 38px;
+    padding: 9px 12px 9px 36px;
+    line-height: 1.4;
+    resize: none;
     border-radius: var(--radius-control);
     border: 1px solid var(--border-subtle);
     background: rgba(var(--card-rgb), 0.85);
@@ -1374,6 +1377,7 @@
   .add-plus-icon {
     position: absolute;
     left: 11px;
+    top: 11px;
     color: var(--text-muted);
     pointer-events: none;
   }
@@ -2000,7 +2004,7 @@
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <input type="text" class="add-input" id="newTaskInput" placeholder="添加新待办" />
+          <textarea class="add-input" id="newTaskInput" rows="1" placeholder="添加新待办"></textarea>
         </div>
         <select class="section-select" id="sectionSelect" title="选择插入到哪个 Markdown 标题章节下">
           <option value="__uncategorized__">未分类</option>
@@ -2086,6 +2090,10 @@ let hideCompletedTasks = false;
 let restoredQuickSection = null;
 let searchQuery = "";
 let editingLineIndex = null;
+// Raw-text caret offset for the next edit session, captured from the
+// exact character the user clicked; null = caret to the end (pencil
+// button, keyboard entry, or no precise hit available).
+let editingCaretOffset = null;
 // How many lines the edited title wraps to, measured when edit mode starts,
 // so the edit box opens at the same height (1 line in a wide window, 2+ in a
 // narrow one) and the whole title stays visible.
@@ -2473,10 +2481,11 @@ function moveTaskLine(lineIndex, targetSection) {
 }
 
 function addNewTask() {
-  const text = newTaskInput.value.trim();
+  const text = newTaskInput.value.replace(/\s*\n\s*/g, " ").trim();
   if (!text) return;
   insertTaskLine(`- [ ] ${text}`, sectionSelect.value);
   newTaskInput.value = "";
+  autoGrowTextarea(newTaskInput);
 }
 
 // Quick-add row rendered at the bottom of every section group: click to
@@ -2491,21 +2500,24 @@ function createSectionAddRow(sectionName) {
   plus.className = "add-row-plus";
   plus.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
 
-  const input = document.createElement("input");
+  const input = document.createElement("textarea");
   input.className = "add-row-input";
-  input.type = "text";
+  input.rows = 1;
   input.placeholder = "添加新待办";
   input.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      const text = input.value.trim();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const text = input.value.replace(/\s*\n\s*/g, " ").trim();
       if (!text) return;
       pendingAddFocusSection = sectionName;
       insertTaskLine(`- [ ] ${text}`, sectionName === "未分类" ? "__uncategorized__" : sectionName);
     } else if (e.key === "Escape") {
       input.value = "";
+      autoGrowTextarea(input);
       input.blur();
     }
   });
+  input.addEventListener("input", () => autoGrowTextarea(input));
 
   row.addEventListener("click", () => input.focus());
   row.appendChild(plus);
@@ -2703,9 +2715,16 @@ function renderApp() {
           renderApp();
         }
       });
+      input.addEventListener("input", () => autoGrowTextarea(input, 8));
       input.addEventListener("blur", commitEdit);
       body.appendChild(input);
-      setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 10);
+      setTimeout(() => {
+        input.focus();
+        const caret = editingCaretOffset != null ? Math.min(editingCaretOffset, input.value.length) : input.value.length;
+        editingCaretOffset = null;
+        input.setSelectionRange(caret, caret);
+        autoGrowTextarea(input, 8);
+      }, 10);
     } else {
       const row = document.createElement("div");
       row.className = "task-text-row";
@@ -2733,8 +2752,10 @@ function renderApp() {
       body.appendChild(row);
     }
 
-    // Hover Actions
-    const actions = document.createElement("div");
+    // Hover Actions — not rendered at all on the card being edited
+    let actions = null;
+    if (editingLineIndex !== task.lineIndex) {
+    actions = document.createElement("div");
     actions.className = "task-actions";
 
     const btnStar = document.createElement("button");
@@ -2749,6 +2770,7 @@ function renderApp() {
     btnEdit.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
     btnEdit.addEventListener("click", e => {
       measureEditRows(e.currentTarget.closest(".task-card"));
+      editingCaretOffset = null;
       editingLineIndex = task.lineIndex;
       renderApp();
     });
@@ -2762,10 +2784,11 @@ function renderApp() {
     actions.appendChild(btnStar);
     actions.appendChild(btnEdit);
     actions.appendChild(btnDel);
+    }
 
     card.appendChild(checkbox);
     card.appendChild(body);
-    card.appendChild(actions);
+    if (actions) card.appendChild(actions);
     taskListContainer.appendChild(card);
     displayIdx++;
     });
@@ -2925,6 +2948,140 @@ function toggleBoldSelection(input) {
 
 function isBoldShortcut(e) {
   return (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "b";
+}
+
+// --- Click-point caret -------------------------------------------------
+// Clicking task text opens the editor with the caret on the clicked
+// character. Three text forms are involved, so the position is mapped
+// step by step: rendered (visible) characters -> displayText (syntax
+// restored) -> rawText (#tags / !priority put back).
+
+// parseMarkdown's display cleaning, replicated with an index map:
+// returns { clean, toRaw } where toRaw[i] is the raw index of clean[i],
+// plus a terminal entry for the end-of-text position.
+function cleanTextWithMap(raw) {
+  let s = raw;
+  let map = Array.from({ length: raw.length }, (_, i) => i);
+  const stripPass = re => {
+    const matches = [...s.matchAll(re)];
+    if (!matches.length) return;
+    let out = "";
+    const newMap = [];
+    let last = 0;
+    for (const m of matches) {
+      out += s.slice(last, m.index);
+      for (let i = last; i < m.index; i++) newMap.push(map[i]);
+      last = m.index + m[0].length;
+    }
+    out += s.slice(last);
+    for (let i = last; i < s.length; i++) newMap.push(map[i]);
+    s = out;
+    map = newMap;
+  };
+  stripPass(/(?:^|\s)#([^\s#]+)/g);
+  stripPass(/(?:^|\s)!(高|紧急|high|!)/gi);
+  let start = 0;
+  while (start < s.length && /\s/.test(s[start])) start++;
+  let end = s.length;
+  while (end > start && /\s/.test(s[end - 1])) end--;
+  const clean = s.slice(start, end);
+  const toRaw = map.slice(start, end);
+  toRaw.push(end > start ? map[end - 1] + 1 : (start < map.length ? map[start] : raw.length));
+  return { clean, toRaw };
+}
+
+// Map a visible-character offset in a task's displayText to the
+// displayText offset (syntax characters are invisible but counted).
+function displayOffsetFromVisible(displayText, visibleOffset) {
+  const trimTail = raw => {
+    let url = raw;
+    for (;;) {
+      const tail = url[url.length - 1];
+      if (".,;:!?，。、；：！？）】」』…".includes(tail)) { url = url.slice(0, -1); continue; }
+      if (tail === ")" && !url.includes("(")) { url = url.slice(0, -1); continue; }
+      if (tail === "]" && !url.includes("[")) { url = url.slice(0, -1); continue; }
+      return url;
+    }
+  };
+  const map = [];
+  const walk = (text, base) => {
+    const re = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==/g;
+    let last = 0;
+    let m;
+    const plain = (from, to) => { for (let i = from; i < to; i++) map.push(base + i); };
+    while ((m = re.exec(text)) !== null) {
+      plain(last, m.index);
+      let consumed = m[0].length;
+      if (m[1] !== undefined) {
+        for (let i = 0; i < m[1].length; i++) map.push(base + m.index + 1 + i);
+      } else if (m[3] !== undefined) {
+        for (let i = 0; i < m[3].length; i++) map.push(base + m.index + 1 + i);
+      } else if (m[4] !== undefined) {
+        const url = trimTail(m[4]);
+        consumed = m[0].length - (m[4].length - url.length);
+        for (let i = 0; i < url.length; i++) map.push(base + m.index + i);
+      } else if (m[5] !== undefined) {
+        const rawUrl = trimTail(m[5]);
+        consumed = m[0].length - (m[5].length - rawUrl.length);
+        for (let i = 0; i < rawUrl.length; i++) map.push(base + m.index + i);
+      } else if (m[6] !== undefined) {
+        walk(m[6], base + m.index + 2);
+      } else {
+        walk(m[7], base + m.index + 2);
+      }
+      last = m.index + consumed;
+      re.lastIndex = last;
+    }
+    plain(last, text.length);
+  };
+  walk(displayText, 0);
+  map.push(displayText.length);
+  return map[Math.max(0, Math.min(visibleOffset, map.length - 1))];
+}
+
+// Visible characters before the caret within a rendered text span.
+function visibleOffsetInSpan(span, container, offset) {
+  const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+  let total = 0;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node === container) return total + offset;
+    total += node.length;
+  }
+  return null;
+}
+
+// The raw-text caret offset for a click at (x, y) on a card, or null
+// when the click did not land precisely on the task text.
+function caretOffsetFromClick(card, lineIndex, x, y) {
+  try {
+    const span = card.querySelector(".task-text");
+    if (!span || typeof document.caretRangeFromPoint !== "function") return null;
+    const range = document.caretRangeFromPoint(x, y);
+    if (!range || !span.contains(range.startContainer)) return null;
+    const vis = visibleOffsetInSpan(span, range.startContainer, range.startOffset);
+    if (vis == null) return null;
+    const task = parseMarkdown(rawContent).tasks.find(t => t.lineIndex === lineIndex);
+    if (!task) return null;
+    const disp = displayOffsetFromVisible(task.displayText, vis);
+    if (task.displayText === task.rawText) return disp;
+    const { clean, toRaw } = cleanTextWithMap(task.rawText);
+    if (clean !== task.displayText) return disp;
+    return toRaw[Math.min(disp, toRaw.length - 1)];
+  } catch {
+    return null;
+  }
+}
+
+// Grow a textarea with its soft-wrapped content: rows track the wrapped
+// line count between 1 and maxRows.
+function autoGrowTextarea(ta, maxRows = 6) {
+  const cs = getComputedStyle(ta);
+  const lh = parseFloat(cs.lineHeight) || 19;
+  const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  ta.rows = 1;
+  const lines = Math.round((ta.scrollHeight - pad) / lh);
+  ta.rows = Math.min(maxRows, Math.max(1, lines));
 }
 
 // The eye's effective state: in the 已完成 status lens the completed tasks
@@ -3126,8 +3283,9 @@ document.querySelectorAll("#compactFilters .filter-pill").forEach(el => {
 
 newTaskInput.addEventListener("keydown", e => {
   if (isBoldShortcut(e)) { e.preventDefault(); toggleBoldSelection(newTaskInput); return; }
-  if (e.key === "Enter") addNewTask();
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addNewTask(); }
 });
+newTaskInput.addEventListener("input", () => autoGrowTextarea(newTaskInput));
 
 document.getElementById("btnClearCompleted").addEventListener("click", () => {
   hideCompletedTasks = !hideCompletedTasks;
@@ -3624,6 +3782,7 @@ taskListContainer.addEventListener("click", e => {
   if (card.querySelector(".task-edit-input")) return;
   const lineIndex = Number(card.dataset.lineIndex);
   if (editingLineIndex === lineIndex) return;
+  editingCaretOffset = caretOffsetFromClick(card, lineIndex, e.clientX, e.clientY);
   measureEditRows(card);
   editingLineIndex = lineIndex;
   renderApp();
