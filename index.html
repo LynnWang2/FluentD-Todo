@@ -1340,7 +1340,9 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 2px;
+    /* No padding: the button fills the panel exactly, so its hover tint
+       covers the whole box instead of leaving a card-colored ring. */
+    padding: 0;
     border-radius: var(--radius-control);
     background: rgb(var(--card-rgb));
     box-shadow: var(--shadow-card);
