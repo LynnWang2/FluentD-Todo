@@ -57,9 +57,10 @@
     --shadow-card: 0 6px 24px rgba(31, 58, 95, 0.08), 0 2px 6px rgba(31, 58, 95, 0.04);
     --shadow-pop: 0 12px 32px rgba(31, 58, 95, 0.14), 0 3px 8px rgba(31, 58, 95, 0.06);
     --radius-window: 16px;
-    --radius-card: 16px;
+    --radius-card: 12px;
+    --radius-panel: 16px;
     --radius-control: 8px;
-    --radius-mid: 12px;
+    --radius-mid: 8px;
   }
 
   [data-theme="dark"] {
@@ -860,7 +861,7 @@
     flex-direction: column;
     gap: 2px;
     padding: 5px;
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-panel);
     background: rgba(var(--surface-rgb), 0.97);
     border: none;
     box-shadow: var(--shadow-pop);
@@ -919,12 +920,16 @@
 
   .progress-fill {
     height: 100%;
-    /* Monochrome like the rest of the UI: near-white in dark mode, dark gray
-       in light mode (was accent blue) */
-    background: var(--text-primary);
+    /* Monochrome like the rest of the UI: gray in light mode (was
+       near-black), near-white in dark mode */
+    background: var(--text-secondary);
     border-radius: 999px;
     width: 0%;
     transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  [data-theme="dark"] .progress-fill {
+    background: var(--text-primary);
   }
 
   /* The count never wraps to two lines; in the narrow layout it hides instead */
@@ -1005,10 +1010,14 @@
     pointer-events: none;
   }
 
-  /* Compact filter pills (visible when sidebar hidden) */
+  /* Compact filter pills (visible when sidebar hidden). The vertical
+     padding gives the pills' diffuse shadow room inside the horizontal
+     scrollport (overflow clips it otherwise); the negative margin keeps
+     the total layout height unchanged. */
   .compact-filters {
     display: none;
-    padding: 0 20px 8px;
+    padding: 0 20px 16px;
+    margin-bottom: -8px;
     gap: 6px;
     overflow-x: auto;
   }
@@ -1575,7 +1584,7 @@
     z-index: 300;
     min-width: 172px;
     padding: 5px;
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-panel);
     background: rgba(var(--surface-rgb), 0.96);
     backdrop-filter: blur(18px);
     border: none;
