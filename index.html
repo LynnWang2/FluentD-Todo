@@ -968,7 +968,9 @@
   .search-box {
     position: relative;
     flex: 0 1 190px;
-    min-width: 96px;
+    /* Shrinks first as the window narrows, down to a still-usable floor,
+       so the sidebar survives narrower windows. */
+    min-width: 72px;
   }
 
   .search-input {
@@ -3474,7 +3476,7 @@ btnSidebarToggle.addEventListener("click", () => {
   // toggle stays locked until the window is wide enough again — say so
   // instead of silently ignoring the click.
   if (window.innerWidth < SIDEBAR_NARROW_THRESHOLD) {
-    showToast(`窗口太窄，侧边栏暂时展开不了——把窗口拉宽到 ${SIDEBAR_NARROW_THRESHOLD} 以上就能用了`);
+    showToast("窗口太窄，侧边栏暂时展开不了");
     return;
   }
   sidebarAutoCollapsed = false; // a manual toggle overrides the auto memory
@@ -3488,7 +3490,10 @@ btnSidebarToggle.addEventListener("click", () => {
 // restores the labels — and the sidebar too, but only when it was the
 // narrowing that hid it (a manual collapse stays).
 const TITLEBAR_NARROW_THRESHOLD = 680;
-const SIDEBAR_NARROW_THRESHOLD = 620;
+// Squeeze budget for keeping the sidebar: 195px sidebar + ~325px main pane
+// (40 header padding + ~160 title/progress + 12 + 32 eye + 8 + 72
+// search floor). Below that the header row itself runs out of room.
+const SIDEBAR_NARROW_THRESHOLD = 520;
 // Below this the file pill and the opacity slider start colliding; the
 // sidebar toggle (leftmost in that row) leaves the toolbar to free room.
 const SIDEBAR_TOGGLE_HIDE_THRESHOLD = 420;
