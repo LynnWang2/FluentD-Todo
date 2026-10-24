@@ -784,6 +784,15 @@
     color: #ffffff;
   }
 
+  /* Dark mode: selected-state text is translucent black, not white */
+  [data-theme="dark"] .nav-item[data-filter].active {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  [data-theme="dark"] .nav-item[data-filter].active .nav-count {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
   /* Main Task Area */
   .main-pane {
     flex: 1;
@@ -1043,6 +1052,10 @@
     background: var(--accent);
     color: #ffffff;
     font-weight: 600;
+  }
+
+  [data-theme="dark"] .filter-pill.active {
+    color: rgba(0, 0, 0, 0.6);
   }
 
   /* Task Scroll List */
