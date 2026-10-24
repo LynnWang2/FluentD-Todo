@@ -1324,6 +1324,11 @@
     color: var(--accent);
   }
 
+  /* Tags rendered inside the task text: one unbroken unit per tag */
+  .task-text .badge-tag {
+    display: inline-block;
+  }
+
   /* Delete floats over the text on hover: it takes no layout space, so
      the text uses the card's full width. The solid card-colored panel
      underneath (with shadow) keeps the button legible over the text it
@@ -2229,15 +2234,9 @@ function parseMarkdown(mdText) {
       const completed = tMatch[3].toLowerCase() === "x";
       const rawTaskText = tMatch[4];
 
-      // Extract inline #tags for display badges (!priority is gone:
-      // the marker now stays literal text)
-      const tags = [];
-      const cleanText = rawTaskText
-        .replace(/(?:^|\s)#([^\s#]+)/g, (_, tag) => {
-          tags.push(tag);
-          return "";
-        })
-        .trim();
+      // Tags stay inline in the text (rendered as badges where typed);
+      // displayText is just the trimmed raw text.
+      const cleanText = rawTaskText.trim();
 
       tasks.push({
         lineIndex: idx,
@@ -2246,7 +2245,6 @@ function parseMarkdown(mdText) {
         completed,
         rawText: rawTaskText,
         displayText: cleanText || rawTaskText,
-        tags,
         section: currentSection,
         isSubtask: indent.length >= 2
       });
@@ -2761,13 +2759,6 @@ function renderApp() {
       textSpan.title = "点击直接修改此条待办文字";
       row.appendChild(textSpan);
 
-      task.tags.forEach(tag => {
-        const tBadge = document.createElement("span");
-        tBadge.className = "badge badge-tag";
-        tBadge.textContent = `#${tag}`;
-        row.appendChild(tBadge);
-      });
-
       body.appendChild(row);
     }
 
@@ -2816,7 +2807,7 @@ function openExternalUrl(url) {
 // Everything else stays plain text nodes, so task text can never inject
 // markup. Only http(s) is linked.
 function appendRichText(span, text, inAnchor = false) {
-  const linkRe = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==/g;
+  const linkRe = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==|(^|\s)(#[^\s#]+)/g;
   // Trailing characters that belong to the sentence, not the URL (ASCII
   // and CJK punctuation); a closing paren is trimmed only when unbalanced.
   const trimTail = raw => {
@@ -2871,6 +2862,14 @@ function appendRichText(span, text, inAnchor = false) {
       const strong = document.createElement("strong");
       appendRichText(strong, m[6]);
       span.appendChild(strong);
+    } else if (m[8] !== undefined) {
+      // Inline #tag: the preceding space stays plain text, the tag itself
+      // becomes a badge exactly where it was typed.
+      if (m[8]) span.appendChild(document.createTextNode(m[8]));
+      const badge = document.createElement("span");
+      badge.className = "badge badge-tag";
+      badge.textContent = m[9];
+      span.appendChild(badge);
     } else {
       const mark = document.createElement("mark");
       mark.className = "task-highlight";
@@ -2956,7 +2955,8 @@ function isBoldShortcut(e) {
 // step by step: rendered (visible) characters -> displayText (syntax
 // restored) -> rawText (#tags / !priority put back).
 
-// parseMarkdown's display cleaning, replicated with an index map:
+// parseMarkdown's display cleaning (now trim-only: tags stay inline),
+ // replicated with an index map:
 // returns { clean, toRaw } where toRaw[i] is the raw index of clean[i],
 // plus a terminal entry for the end-of-text position.
 function cleanTextWithMap(raw) {
@@ -2978,7 +2978,6 @@ function cleanTextWithMap(raw) {
     s = out;
     map = newMap;
   };
-  stripPass(/(?:^|\s)#([^\s#]+)/g);
   let start = 0;
   while (start < s.length && /\s/.test(s[start])) start++;
   let end = s.length;
