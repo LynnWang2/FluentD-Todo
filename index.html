@@ -415,7 +415,6 @@
 
   /* Monochrome thin-line slider: filled part / rest part swap with the theme */
   .opacity-slider {
-    color: var(--text-secondary);
     -webkit-appearance: none;
     appearance: none;
     width: 64px;
@@ -432,7 +431,7 @@
     width: 8.4px;
     height: 8.4px;
     border-radius: 50%;
-    background: currentColor;
+    background: rgb(var(--ink-rgb)); /* solid fill: full-opacity ink */
     border: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     cursor: pointer;
@@ -442,7 +441,7 @@
     width: 8.4px;
     height: 8.4px;
     border-radius: 50%;
-    background: currentColor;
+    background: rgb(var(--ink-rgb)); /* solid fill: full-opacity ink */
     border: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     cursor: pointer;
@@ -1076,7 +1075,7 @@
   .section-group-header {
     font-size: 12px;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--text-secondary);
     margin: 10px 0 2px;
     padding: 2px 4px;
     display: flex;
