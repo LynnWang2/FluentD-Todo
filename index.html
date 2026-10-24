@@ -1142,7 +1142,10 @@
   .task-card {
     position: relative;
     display: flex;
-    align-items: center;
+    /* Top-aligned: the checkbox sits level with the first text line
+       (both start at the card's top padding, ~19px tall) instead of
+       centering against the whole multi-line card. */
+    align-items: flex-start;
     gap: 11px;
     padding: 10px 13px;
     border-radius: var(--radius-card);
