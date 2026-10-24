@@ -1284,21 +1284,15 @@
     color: var(--text-muted);
   }
 
-  /* Strikethrough is drawn by ::after (Motion section) so it can sweep in */
-  .task-text {
-    position: relative;
-  }
-
-  .task-card.completed .task-text::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 55%;
-    height: 1.5px;
-    background: currentColor;
-    opacity: 0.55;
-    transform-origin: left center;
+  /* Strikethrough is drawn as a repeating gradient: one 1.5px strike per
+     1.4em line box, so every line of a multi-line task is struck at its
+     own middle (a single ::after at 55% of the block height cut through
+     the middle of the block instead). The sweep animation below grows
+     the background width from 0. */
+  .task-card.completed .task-text {
+    background-image: linear-gradient(to bottom, transparent calc(55% - 0.75px), color-mix(in srgb, currentColor 55%, transparent) calc(55% - 0.75px), color-mix(in srgb, currentColor 55%, transparent) calc(55% + 0.75px), transparent calc(55% + 0.75px));
+    background-size: 100% 1.4em;
+    background-repeat: repeat-y;
   }
 
   .task-edit-input {
@@ -1769,11 +1763,11 @@
   }
 
   @keyframes strikeIn {
-    from { transform: scaleX(0); }
-    to { transform: scaleX(1); }
+    from { background-size: 0% 1.4em; }
+    to { background-size: 100% 1.4em; }
   }
 
-  .task-card.just-toggled.completed .task-text::after {
+  .task-card.just-toggled.completed .task-text {
     animation: strikeIn 0.3s ease-out;
   }
 
