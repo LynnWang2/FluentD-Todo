@@ -3364,6 +3364,22 @@ function paintOpacity(val) {
   rootStyle.setProperty("--alpha-border-subtle", boost(0.08, 0.24));
   rootStyle.setProperty("--alpha-slider", boost(dark ? 0.95 : 0.62, 1));
   rootStyle.setProperty("--alpha-slider-rest", boost(dark ? 0.30 : 0.20, 0.45));
+  // Light-mode accent follows the slider too: below 64 it deepens along
+  // the same t curve toward its hover shade, and the hover shade deepens
+  // by the same step so it stays visibly deeper. Dark mode untouched for
+  // now. Inline overrides are removed whenever they would equal the sheet
+  // (t = 0, or dark), so a theme switch never inherits a stale accent.
+  if (!dark && t > 0) {
+    const lerp = (a, b) => Math.round(a + (b - a) * t);
+    const r = lerp(62, 43), g = lerp(162, 144), b = lerp(248, 233);
+    rootStyle.setProperty("--accent", `rgb(${r}, ${g}, ${b})`);
+    rootStyle.setProperty("--accent-hover", `rgb(${lerp(43, 24)}, ${lerp(144, 126)}, ${lerp(233, 218)})`);
+    rootStyle.setProperty("--accent-light", `rgba(${r}, ${g}, ${b}, 0.10)`);
+  } else {
+    rootStyle.removeProperty("--accent");
+    rootStyle.removeProperty("--accent-hover");
+    rootStyle.removeProperty("--accent-light");
+  }
 }
 function opacityTick() {
   opacityShown += (opacityTarget - opacityShown) * 0.3;
