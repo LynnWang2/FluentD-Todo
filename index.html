@@ -1140,6 +1140,7 @@
   }
 
   .task-card {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 11px;
@@ -1323,22 +1324,32 @@
     color: var(--accent);
   }
 
-  .badge-priority-high {
-    background: var(--danger-bg);
-    color: var(--danger);
-    font-weight: 600;
-  }
-
+  /* Delete floats over the text on hover: it takes no layout space, so
+     the text uses the card's full width. The solid card-colored panel
+     underneath (with shadow) keeps the button legible over the text it
+     covers. pointer-events stay off while invisible so the hidden button
+     never eats clicks on the text beneath it. */
   .task-actions {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 4px;
+    padding: 2px;
+    border-radius: var(--radius-control);
+    background: rgb(var(--card-rgb));
+    box-shadow: var(--shadow-card);
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.14s ease;
   }
 
   .task-card:hover .task-actions {
     opacity: 1;
+    pointer-events: auto;
   }
 
   .task-action-btn {
@@ -2218,16 +2229,12 @@ function parseMarkdown(mdText) {
       const completed = tMatch[3].toLowerCase() === "x";
       const rawTaskText = tMatch[4];
 
-      // Extract inline #tags and !priority for display badges
+      // Extract inline #tags for display badges (!priority is gone:
+      // the marker now stays literal text)
       const tags = [];
-      let highPriority = false;
       const cleanText = rawTaskText
         .replace(/(?:^|\s)#([^\s#]+)/g, (_, tag) => {
           tags.push(tag);
-          return "";
-        })
-        .replace(/(?:^|\s)!(高|紧急|high|!)/gi, () => {
-          highPriority = true;
           return "";
         })
         .trim();
@@ -2240,7 +2247,6 @@ function parseMarkdown(mdText) {
         rawText: rawTaskText,
         displayText: cleanText || rawTaskText,
         tags,
-        highPriority,
         section: currentSection,
         isSubtask: indent.length >= 2
       });
@@ -2427,17 +2433,6 @@ function updateTaskText(lineIndex, newText) {
   saveToMarkdownFile(lines.join("\n"), "内容已更新");
 }
 
-function toggleTaskPriority(lineIndex) {
-  const { lines } = parseMarkdown(rawContent);
-  const line = lines[lineIndex];
-  if (typeof line !== "string") return;
-  if (/(?:^|\s)!(高|紧急|high|!)/i.test(line)) {
-    lines[lineIndex] = line.replace(/(?:^|\s)!(高|紧急|high|!)/gi, "");
-  } else {
-    lines[lineIndex] = `${line.trimEnd()} !高`;
-  }
-  saveToMarkdownFile(lines.join("\n"), "优先级已切换");
-}
 
 function restoreLine(lineIndex, text) {
   if (typeof text !== "string") return;
@@ -2766,13 +2761,6 @@ function renderApp() {
       textSpan.title = "点击直接修改此条待办文字";
       row.appendChild(textSpan);
 
-      if (task.highPriority) {
-        const pBadge = document.createElement("span");
-        pBadge.className = "badge badge-priority-high";
-        pBadge.textContent = "重要";
-        row.appendChild(pBadge);
-      }
-
       task.tags.forEach(tag => {
         const tBadge = document.createElement("span");
         tBadge.className = "badge badge-tag";
@@ -2783,28 +2771,11 @@ function renderApp() {
       body.appendChild(row);
     }
 
-    // Hover Actions — not rendered at all on the card being edited
+    // Hover delete action — not rendered at all on the card being edited
     let actions = null;
     if (editingLineIndex !== task.lineIndex) {
     actions = document.createElement("div");
     actions.className = "task-actions";
-
-    const btnStar = document.createElement("button");
-    btnStar.className = "task-action-btn";
-    btnStar.title = "切换重要优先级 (!高)";
-    btnStar.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${task.highPriority ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
-    btnStar.addEventListener("click", () => toggleTaskPriority(task.lineIndex));
-
-    const btnEdit = document.createElement("button");
-    btnEdit.className = "task-action-btn";
-    btnEdit.title = "编辑待办内容";
-    btnEdit.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
-    btnEdit.addEventListener("click", e => {
-      measureEditRows(e.currentTarget.closest(".task-card"));
-      editingCaretOffset = null;
-      editingLineIndex = task.lineIndex;
-      renderApp();
-    });
 
     const btnDel = document.createElement("button");
     btnDel.className = "task-action-btn delete";
@@ -2812,8 +2783,6 @@ function renderApp() {
     btnDel.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
     btnDel.addEventListener("click", () => deleteTask(task.lineIndex));
 
-    actions.appendChild(btnStar);
-    actions.appendChild(btnEdit);
     actions.appendChild(btnDel);
     }
 
@@ -3010,7 +2979,6 @@ function cleanTextWithMap(raw) {
     map = newMap;
   };
   stripPass(/(?:^|\s)#([^\s#]+)/g);
-  stripPass(/(?:^|\s)!(高|紧急|high|!)/gi);
   let start = 0;
   while (start < s.length && /\s/.test(s[start])) start++;
   let end = s.length;
