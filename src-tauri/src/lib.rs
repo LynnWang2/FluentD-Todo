@@ -278,39 +278,38 @@ fn set_autostart_state(_app: tauri::AppHandle, enabled: bool) -> Result<(), Stri
 /// rounds every layer at once. No-op elsewhere (radius 0 restores square,
 /// used while maximized, like native windows).
 ///
-/// Commands run on a Tauri worker thread, but AppKit must run on the main
-/// thread (same lesson as the v2.0.16 Apple Silicon crash), so the native
-/// calls are dispatched with run_on_main_thread.
+/// Round the frosted layer on macOS by giving the vibrancy view itself a
+/// corner radius (Tauri passes it to NSVisualEffectView's own
+/// setCornerRadius — no layer involved). The old approach layered the whole
+/// content view (setWantsLayer + masksToBounds) to clip the native window,
+/// but a layer-backed ancestor flattens the vibrancy view into an opaque
+/// backing layer: BehindWindow sampling dies and the desktop stops showing
+/// through entirely, no matter the material (Sidebar and WindowBackground
+/// both looked solid). The page surface is already rounded by CSS
+/// (body.is-mac.pure-transparent .fluent-window), so only the frosted layer
+/// needs the radius. Re-applying effects destroys and recreates the effect
+/// view, so skip when the radius did not change (this command also runs on
+/// every resize via syncCornerRadius).
+static LAST_EFFECT_RADIUS_BITS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(u64::MAX);
+
 #[tauri::command]
 fn set_window_corner_radius(app: tauri::AppHandle, window: tauri::WebviewWindow, radius: f64) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        app.run_on_main_thread(move || {
-            let _ = window
-                .with_webview(move |webview| {
-                    use objc2::msg_send;
-                    use objc2::runtime::AnyObject;
-                    unsafe {
-                        let ns_window = webview.ns_window() as *mut AnyObject;
-                        if ns_window.is_null() {
-                            return;
-                        }
-                        let content_view: *mut AnyObject = msg_send![ns_window, contentView];
-                        if content_view.is_null() {
-                            return;
-                        }
-                        let _: () = msg_send![content_view, setWantsLayer: true];
-                        let layer: *mut AnyObject = msg_send![content_view, layer];
-                        if layer.is_null() {
-                            return;
-                        }
-                        let _: () = msg_send![layer, setCornerRadius: radius];
-                        let _: () = msg_send![layer, setMasksToBounds: true];
-                    }
-                })
-                .map_err(|error| error.to_string());
-        })
-        .map_err(|error| error.to_string())?;
+        let _ = app;
+        let bits = radius.to_bits();
+        if LAST_EFFECT_RADIUS_BITS.swap(bits, std::sync::atomic::Ordering::Relaxed) == bits {
+            return Ok(());
+        }
+        window
+            .set_effects(
+                tauri::window::EffectsBuilder::new()
+                    .effect(tauri::window::Effect::Sidebar)
+                    .radius(radius)
+                    .build(),
+            )
+            .map_err(|error| error.to_string())?;
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -542,8 +541,10 @@ pub fn run() {
                     #[cfg(target_os = "macos")]
                     // Sidebar again: WindowBackground was tried to get
                     // closer to Windows DWM blur, but the desktop still did
-                    // not show through on Mac — reverted.
-                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::Sidebar).build();
+                    // not show through on Mac — reverted. radius(16) rounds
+                    // the vibrancy view itself; never layer-back the content
+                    // view to round it (that kills BehindWindow sampling).
+                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::Sidebar).radius(16.0).build();
                     #[cfg(any(target_os = "windows", target_os = "macos"))]
                     let _ = window.set_effects(effects);
                     #[cfg(target_os = "windows")]
