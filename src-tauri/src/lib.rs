@@ -278,10 +278,9 @@ fn set_autostart_state(_app: tauri::AppHandle, enabled: bool) -> Result<(), Stri
 /// rounds every layer at once. No-op elsewhere (radius 0 restores square,
 /// used while maximized, like native windows).
 ///
-/// Round the frosted layer on macOS by giving the vibrancy view itself a
-/// corner radius (Tauri passes it to NSVisualEffectView's own
-/// setCornerRadius — no layer involved). The old approach layered the whole
-/// content view (setWantsLayer + masksToBounds) to clip the native window,
+/// Round the frosted layer on macOS by giving the glass view itself a
+/// corner radius (Tauri passes it to the glass/vibrancy view — no layer
+/// involved). The old approach layered the whole content view (setWantsLayer + masksToBounds) to clip the native window,
 /// but a layer-backed ancestor flattens the vibrancy view into an opaque
 /// backing layer: BehindWindow sampling dies and the desktop stops showing
 /// through entirely, no matter the material (Sidebar and WindowBackground
@@ -305,6 +304,11 @@ fn set_window_corner_radius(app: tauri::AppHandle, window: tauri::WebviewWindow,
         window
             .set_effects(
                 tauri::window::EffectsBuilder::new()
+                    // macOS 26+: Liquid Glass Clear first (closest to Windows
+                    // DWM blur), Sidebar as the fallback on older macOS
+                    // (Tauri falls back to the material when liquid glass
+                    // is unsupported). radius rounds the glass view itself.
+                    .effect(tauri::window::Effect::LiquidGlassClear)
                     .effect(tauri::window::Effect::Sidebar)
                     .radius(radius)
                     .build(),
@@ -539,12 +543,12 @@ pub fn run() {
                     #[cfg(target_os = "windows")]
                     let effects = EffectsBuilder::new().effect(tauri::window::Effect::Blur).build();
                     #[cfg(target_os = "macos")]
-                    // Sidebar again: WindowBackground was tried to get
-                    // closer to Windows DWM blur, but the desktop still did
-                    // not show through on Mac — reverted. radius(16) rounds
-                    // the vibrancy view itself; never layer-back the content
-                    // view to round it (that kills BehindWindow sampling).
-                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::Sidebar).radius(16.0).build();
+                    // macOS 26+: Liquid Glass Clear first (closest to
+                    // Windows DWM blur), Sidebar as the fallback on older
+                    // macOS. radius(16) rounds the glass view itself; never
+                    // layer-back the content view to round it (that kills
+                    // BehindWindow sampling).
+                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::LiquidGlassClear).effect(tauri::window::Effect::Sidebar).radius(16.0).build();
                     #[cfg(any(target_os = "windows", target_os = "macos"))]
                     let _ = window.set_effects(effects);
                     #[cfg(target_os = "windows")]
