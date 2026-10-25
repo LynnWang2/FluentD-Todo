@@ -3319,8 +3319,10 @@ function paintOpacity(val) {
   // proportion toward its cap: text tiers and the slider can reach 1, the
   // disabled gray caps at 0.50 so it never reads as clickable, borders cap
   // lower (they are hairlines, not content). Stepless: recomputed from the
-  // eased value on every animation frame.
-  const t = Math.min(1, Math.max(0, (0.64 - val) / (0.64 - 0.35)));
+  // eased value on every animation frame. Windows only: on macOS the
+  // native vibrancy owns legibility, so element colors stay at their base
+  // values there and the slider moves the surface transparency alone.
+  const t = isMacPlatform ? 0 : Math.min(1, Math.max(0, (0.64 - val) / (0.64 - 0.35)));
   const boost = (base, cap) => (base + (cap - base) * t).toFixed(3);
   const dark = document.documentElement.getAttribute("data-theme") === "dark";
   rootStyle.setProperty("--alpha-primary", boost(0.90, 1));
