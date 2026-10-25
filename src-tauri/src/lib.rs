@@ -540,13 +540,10 @@ pub fn run() {
                     #[cfg(target_os = "windows")]
                     let effects = EffectsBuilder::new().effect(tauri::window::Effect::Blur).build();
                     #[cfg(target_os = "macos")]
-                    // WindowBackground, not Sidebar: Sidebar is Apple's
-                    // milky high-opacity sidebar material, so even at the
-                    // slider minimum the window stayed whitish instead of
-                    // going clear like Windows DWM blur. WindowBackground
-                    // is the standard window material and lets the desktop
-                    // show through at low opacity the way Windows does.
-                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::WindowBackground).build();
+                    // Sidebar again: WindowBackground was tried to get
+                    // closer to Windows DWM blur, but the desktop still did
+                    // not show through on Mac — reverted.
+                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::Sidebar).build();
                     #[cfg(any(target_os = "windows", target_os = "macos"))]
                     let _ = window.set_effects(effects);
                     #[cfg(target_os = "windows")]
