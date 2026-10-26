@@ -304,12 +304,10 @@ fn set_window_corner_radius(app: tauri::AppHandle, window: tauri::WebviewWindow,
         window
             .set_effects(
                 tauri::window::EffectsBuilder::new()
-                    // macOS 26+: Liquid Glass Clear first (closest to Windows
-                    // DWM blur), Sidebar as the fallback on older macOS
-                    // (Tauri falls back to the material when liquid glass
-                    // is unsupported). radius rounds the glass view itself.
-                    .effect(tauri::window::Effect::LiquidGlassClear)
-                    .effect(tauri::window::Effect::Sidebar)
+                    // Classic frosted material (the Liquid Glass look is
+                    // not what we want). radius rounds the effect view
+                    // itself.
+                    .effect(tauri::window::Effect::WindowBackground)
                     .radius(radius)
                     .build(),
             )
@@ -543,12 +541,11 @@ pub fn run() {
                     #[cfg(target_os = "windows")]
                     let effects = EffectsBuilder::new().effect(tauri::window::Effect::Blur).build();
                     #[cfg(target_os = "macos")]
-                    // macOS 26+: Liquid Glass Clear first (closest to
-                    // Windows DWM blur), Sidebar as the fallback on older
-                    // macOS. radius(16) rounds the glass view itself; never
-                    // layer-back the content view to round it (that kills
-                    // BehindWindow sampling).
-                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::LiquidGlassClear).effect(tauri::window::Effect::Sidebar).radius(16.0).build();
+                    // Classic frosted material (the Liquid Glass look is
+                    // not what we want). radius(16) rounds the effect view
+                    // itself; never layer-back the content view to round it
+                    // (that kills BehindWindow sampling).
+                    let effects = EffectsBuilder::new().effect(tauri::window::Effect::WindowBackground).radius(16.0).build();
                     #[cfg(any(target_os = "windows", target_os = "macos"))]
                     let _ = window.set_effects(effects);
                     #[cfg(target_os = "windows")]
