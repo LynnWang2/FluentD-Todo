@@ -3526,8 +3526,17 @@ applyResponsiveLayout();
 // Keep the native window appearance in sync with the in-app theme: the macOS
 // vibrancy backdrop (Effect::Sidebar) follows the window appearance, not the
 // page theme — without this it stays light and washes dark mode gray.
+// In follow-system mode pass null (no explicit appearance): setting an
+// explicit dark/light here pins the window — and the prefers-color-scheme
+// media query with it — so the change event never fires and the app stops
+// following the system. That was the follow-system bug on macOS.
 function syncNativeWindowTheme() {
   if (!window.__TAURI_INTERNALS__) return;
+  if (themeMode === "system") {
+    getCurrentWindow().setTheme(null)
+      .catch(error => console.error("Could not sync native window theme:", error));
+    return;
+  }
   const dark = document.documentElement.getAttribute("data-theme") === "dark";
   getCurrentWindow().setTheme(dark ? "dark" : "light")
     .catch(error => console.error("Could not sync native window theme:", error));
