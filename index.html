@@ -155,6 +155,12 @@
   body.is-mac.pure-transparent .fluent-window {
     border-radius: 16px;
   }
+  /* macOS only: slider at maximum = fully opaque surface. The background
+     shorthand also clears the wash (background-image) so no glass shows
+     through at all. */
+  body.is-mac.pure-transparent.window-fully-opaque .fluent-window {
+    background: rgb(var(--surface-rgb));
+  }
   body.is-mac.pure-transparent.window-maximized .fluent-window {
     border-radius: 0;
   }
@@ -3326,10 +3332,13 @@ function paintOpacity(val) {
   // proportion toward its cap: text tiers and the slider can reach 1, the
   // disabled gray caps at 0.50 so it never reads as clickable, borders cap
   // lower (they are hairlines, not content). Stepless: recomputed from the
-  // eased value on every animation frame. Windows only: on macOS the
-  // native vibrancy owns legibility, so element colors stay at their base
-  // values there and the slider moves the surface transparency alone.
-  const t = isMacPlatform ? 0 : Math.min(1, Math.max(0, (0.64 - val) / (0.64 - 0.35)));
+  // eased value on every animation frame. Both platforms: the slider moves
+  // element colors as well as surface transparency.
+  const t = Math.min(1, Math.max(0, (0.64 - val) / (0.64 - 0.35)));
+  // macOS only: at the slider maximum the window must go fully opaque —
+  // clear glass plus a 0.97-capped surface still lets the desktop show
+  // through. (Windows DWM blur already reads as opaque there.)
+  document.body.classList.toggle("window-fully-opaque", isMacPlatform && val >= 0.98);
   const boost = (base, cap) => (base + (cap - base) * t).toFixed(3);
   const dark = document.documentElement.getAttribute("data-theme") === "dark";
   rootStyle.setProperty("--alpha-primary", boost(0.90, 1));
