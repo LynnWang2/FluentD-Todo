@@ -267,6 +267,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    /* Never yield: the file pill takes the squeeze, not these buttons */
+    flex-shrink: 0;
   }
 
   .window-controls {
@@ -513,9 +515,12 @@
     flex-shrink: 0;
   }
 
-  /* Anchor for the dropdown: shrink-wraps to the file pill's width */
+  /* Anchor for the dropdown: shrink-wraps to the file pill's width.
+     min-width: 0 lets it shrink inside .file-info so a long file name
+     yields space to the right-side controls instead of pushing them out. */
   .file-menu {
     position: relative;
+    min-width: 0;
   }
 
   .file-pill {
@@ -530,7 +535,8 @@
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text-primary);
-    max-width: 320px;
+    /* Cap the pill so a long name can never eat the right-side controls */
+    max-width: 240px;
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
