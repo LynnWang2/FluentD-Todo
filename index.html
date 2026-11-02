@@ -2812,14 +2812,42 @@ function openExternalUrl(url) {
   }
 }
 
-// Fill a task-text span, linkifying every web URL however it is written:
-// Markdown links [label](https://…), angle autolinks <https://…>, bare
-// https://… URLs and www. hosts. **bold** and ==highlight== render too,
-// and the syntaxes nest (a bold link label, a link inside a bold run).
+// Turn a link destination into an openable URL, or null when it must stay
+// plain text. Any scheme the OS can dispatch is accepted — web, mail,
+// phone, files, app deep links — except scriptable schemes that could
+// execute code. A scheme-less destination gets https:// (or file:// for
+// an absolute path), so [label](example.com) and [label](/path/to/file)
+// work the way [label](https://…) already did. An email address alone
+// becomes a mailto: link.
+const BLOCKED_LINK_SCHEMES = new Set(["javascript", "vbscript", "data"]);
+function resolveLinkTarget(raw) {
+  const dest = raw.trim();
+  // Windows drive path first: C:\… would otherwise read as scheme "c:".
+  const drive = /^([a-zA-Z]:)[\\/]/.exec(dest);
+  if (drive) return `file:///${drive[1]}${encodeURI(dest.slice(2).replace(/\\/g, "/"))}`;
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(dest);
+  if (scheme) {
+    return BLOCKED_LINK_SCHEMES.has(scheme[1].toLowerCase()) ? null : dest;
+  }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dest)) return `mailto:${dest}`;
+  if (/^www\./i.test(dest)) return `https://${dest}`;
+  if (/^[^\s/]+\.[^\s/]+(\/\S*)?$/.test(dest)) return `https://${dest}`;
+  if (dest.startsWith("/")) return `file://${encodeURI(dest)}`;
+  return null;
+}
+
+// Fill a task-text span, linkifying every URL however it is written:
+// Markdown links [label](dest) (dest may use the <…> form when it holds
+// spaces), angle autolinks <…>, bare scheme:// URLs, bare mailto:/tel:,
+// and www. hosts. **bold** and ==highlight== render too, and the
+// syntaxes nest (a bold link label, a link inside a bold run).
 // Everything else stays plain text nodes, so task text can never inject
-// markup. Only http(s) is linked.
+// markup. A destination that resolves to null (a blocked scheme, an
+// anchor, a bare word) is left as literal text.
 function appendRichText(span, text, inAnchor = false) {
-  const linkRe = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==|(^|\s)(#[^\s#]+)/g;
+  // Keep this in step with the walk regex in displayOffsetFromVisible:
+  // the same spans must linkify in both, or click-to-caret mapping drifts.
+  const linkRe = /\[([^\]]+)\]\((?:<([^<>\n]+)>|((?:[^\s()]|\([^\s()]*\))*))\)|<([^<>\s]+)>|([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|((?:mailto:|tel:)[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==|(^|\s)(#[^\s#]+)/g;
   // Trailing characters that belong to the sentence, not the URL (ASCII
   // and CJK punctuation); a closing paren is trimmed only when unbalanced.
   const trimTail = raw => {
@@ -2850,7 +2878,7 @@ function appendRichText(span, text, inAnchor = false) {
   while ((m = linkRe.exec(text)) !== null) {
     let consumed = m[0].length;
     if (m.index > last) span.appendChild(document.createTextNode(text.slice(last, m.index)));
-    if (inAnchor && m[6] === undefined && m[7] === undefined) {
+    if (inAnchor && m[8] === undefined && m[9] === undefined) {
       // A URL inside a link label stays plain text; linkifying it again
       // would recurse without end (a bare URL's label is the URL itself).
       span.appendChild(document.createTextNode(m[0]));
@@ -2859,33 +2887,56 @@ function appendRichText(span, text, inAnchor = false) {
       continue;
     }
     if (m[1] !== undefined) {
-      addAnchor(m[1], m[2]);
-    } else if (m[3] !== undefined) {
-      addAnchor(m[3], m[3]);
+      // Markdown link: <> form (m[2]) or plain form (m[3]).
+      const url = resolveLinkTarget(m[2] !== undefined ? m[2] : m[3]);
+      if (url) addAnchor(m[1], url);
+      else span.appendChild(document.createTextNode(m[0]));
     } else if (m[4] !== undefined) {
-      const url = trimTail(m[4]);
-      consumed = m[0].length - (m[4].length - url.length);
-      addAnchor(url, url);
+      // Angle autolink: the typed text stays the label, the resolved
+      // target becomes the href (so <a@b.com> dials mailto:).
+      const url = resolveLinkTarget(m[4]);
+      if (url) addAnchor(m[4], url);
+      else span.appendChild(document.createTextNode(m[0]));
     } else if (m[5] !== undefined) {
-      const raw = trimTail(m[5]);
-      consumed = m[0].length - (m[5].length - raw.length);
-      addAnchor(raw, `https://${raw}`);
+      // Bare scheme:// URL: blocked schemes (javascript://, data://)
+      // stay plain text instead of linking.
+      const url = trimTail(m[5]);
+      if (resolveLinkTarget(url)) {
+        consumed = m[0].length - (m[5].length - url.length);
+        addAnchor(url, url);
+      } else {
+        span.appendChild(document.createTextNode(m[0]));
+      }
     } else if (m[6] !== undefined) {
-      const strong = document.createElement("strong");
-      appendRichText(strong, m[6]);
-      span.appendChild(strong);
+      // Bare mailto:/tel: — but not mid-word (hotel:xyz is a word,
+      // not a phone link).
+      const raw = trimTail(m[6]);
+      if (m.index > 0 && /[A-Za-z0-9]/.test(text[m.index - 1])) {
+        span.appendChild(document.createTextNode(m[0]));
+      } else {
+        consumed = m[0].length - (m[6].length - raw.length);
+        addAnchor(raw, raw);
+      }
+    } else if (m[7] !== undefined) {
+      const raw = trimTail(m[7]);
+      consumed = m[0].length - (m[7].length - raw.length);
+      addAnchor(raw, `https://${raw}`);
     } else if (m[8] !== undefined) {
+      const strong = document.createElement("strong");
+      appendRichText(strong, m[8]);
+      span.appendChild(strong);
+    } else if (m[10] !== undefined) {
       // Inline #tag: the preceding space stays plain text, the tag itself
       // becomes a badge exactly where it was typed.
-      if (m[8]) span.appendChild(document.createTextNode(m[8]));
+      if (m[10]) span.appendChild(document.createTextNode(m[10]));
       const badge = document.createElement("span");
       badge.className = "badge badge-tag";
-      badge.textContent = m[9];
+      badge.textContent = m[11];
       span.appendChild(badge);
     } else {
       const mark = document.createElement("mark");
       mark.className = "task-highlight";
-      appendRichText(mark, m[7]);
+      appendRichText(mark, m[9]);
       span.appendChild(mark);
     }
     last = m.index + consumed;
@@ -3015,7 +3066,7 @@ function displayOffsetFromVisible(displayText, visibleOffset) {
   };
   const map = [];
   const walk = (text, base) => {
-    const re = /\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))*)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==/g;
+    const re = /\[([^\]]+)\]\((?:<([^<>\n]+)>|((?:[^\s()]|\([^\s()]*\))*))\)|<([^<>\s]+)>|([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s<>\[\]，。、；：！？「」『』【】（）]+)|((?:mailto:|tel:)[^\s<>\[\]，。、；：！？「」『』【】（）]+)|(www\.[^\s<>\[\]，。、；：！？「」『』【】（）]+)|\*\*([^*]+)\*\*|==([^=]+)==/g;
     let last = 0;
     let m;
     const plain = (from, to) => { for (let i = from; i < to; i++) map.push(base + i); };
@@ -3023,21 +3074,44 @@ function displayOffsetFromVisible(displayText, visibleOffset) {
       plain(last, m.index);
       let consumed = m[0].length;
       if (m[1] !== undefined) {
-        for (let i = 0; i < m[1].length; i++) map.push(base + m.index + 1 + i);
-      } else if (m[3] !== undefined) {
-        for (let i = 0; i < m[3].length; i++) map.push(base + m.index + 1 + i);
+        // Markdown link: only the label is visible — unless the
+        // destination does not resolve, in which case the whole literal
+        // stays visible as plain text.
+        if (resolveLinkTarget(m[2] !== undefined ? m[2] : m[3])) {
+          for (let i = 0; i < m[1].length; i++) map.push(base + m.index + 1 + i);
+        } else {
+          plain(m.index, m.index + m[0].length);
+        }
       } else if (m[4] !== undefined) {
-        const url = trimTail(m[4]);
-        consumed = m[0].length - (m[4].length - url.length);
-        for (let i = 0; i < url.length; i++) map.push(base + m.index + i);
+        if (resolveLinkTarget(m[4])) {
+          for (let i = 0; i < m[4].length; i++) map.push(base + m.index + 1 + i);
+        } else {
+          plain(m.index, m.index + m[0].length);
+        }
       } else if (m[5] !== undefined) {
-        const rawUrl = trimTail(m[5]);
-        consumed = m[0].length - (m[5].length - rawUrl.length);
-        for (let i = 0; i < rawUrl.length; i++) map.push(base + m.index + i);
+        const url = trimTail(m[5]);
+        if (resolveLinkTarget(url)) {
+          consumed = m[0].length - (m[5].length - url.length);
+          for (let i = 0; i < url.length; i++) map.push(base + m.index + i);
+        } else {
+          plain(m.index, m.index + m[0].length);
+        }
       } else if (m[6] !== undefined) {
-        walk(m[6], base + m.index + 2);
+        const rawUrl = trimTail(m[6]);
+        if (m.index > 0 && /[A-Za-z0-9]/.test(text[m.index - 1])) {
+          plain(m.index, m.index + m[0].length);
+        } else {
+          consumed = m[0].length - (m[6].length - rawUrl.length);
+          for (let i = 0; i < rawUrl.length; i++) map.push(base + m.index + i);
+        }
+      } else if (m[7] !== undefined) {
+        const rawUrl = trimTail(m[7]);
+        consumed = m[0].length - (m[7].length - rawUrl.length);
+        for (let i = 0; i < rawUrl.length; i++) map.push(base + m.index + i);
+      } else if (m[8] !== undefined) {
+        walk(m[8], base + m.index + 2);
       } else {
-        walk(m[7], base + m.index + 2);
+        walk(m[9], base + m.index + 2);
       }
       last = m.index + consumed;
       re.lastIndex = last;

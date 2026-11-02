@@ -102,8 +102,15 @@ fn save_ui_prefs(app: tauri::AppHandle, opacity: Option<f64>, theme: Option<Stri
 /// handler on Windows avoids cmd's URL-quoting pitfalls).
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("only http(s) links can be opened".to_string());
+    // Any scheme the OS can dispatch (web, mail, phone, files, app deep
+    // links) is allowed; scriptable schemes that could execute code are
+    // refused even if the renderer let one through.
+    let scheme = url.split(':').next().unwrap_or("");
+    let scheme_ok = !scheme.is_empty()
+        && scheme.chars().next().is_ascii_alphabetic()
+        && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    if !scheme_ok || matches!(scheme.to_ascii_lowercase().as_str(), "javascript" | "vbscript" | "data") {
+        return Err("unsupported link scheme".to_string());
     }
     #[cfg(target_os = "windows")]
     std::process::Command::new("rundll32")
