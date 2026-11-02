@@ -105,9 +105,12 @@ fn open_external_url(url: String) -> Result<(), String> {
     // Any scheme the OS can dispatch (web, mail, phone, files, app deep
     // links) is allowed; scriptable schemes that could execute code are
     // refused even if the renderer let one through.
-    let scheme = url.split(':').next().unwrap_or("");
+    let scheme = match url.split_once(':') {
+        Some((scheme, _)) => scheme,
+        None => return Err("unsupported link scheme".to_string()),
+    };
     let scheme_ok = !scheme.is_empty()
-        && scheme.chars().next().is_ascii_alphabetic()
+        && scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
         && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
     if !scheme_ok || matches!(scheme.to_ascii_lowercase().as_str(), "javascript" | "vbscript" | "data") {
         return Err("unsupported link scheme".to_string());
